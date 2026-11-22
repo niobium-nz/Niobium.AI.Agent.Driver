@@ -1,0 +1,11 @@
+<Project Sdk="MSTest.Sdk/4.4.0">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableMicrosoftTestingExtensionsGitHubActionsReport>true</EnableMicrosoftTestingExtensionsGitHubActionsReport>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Niobium.AI.Agent.Driver.Server/Niobium.AI.Agent.Driver.Server.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/Infrastructure/">
+    <File Path="infra/main.bicep" />
+    <File Path="infra/main.bicepparam" />
+    <File Path="infra/function-app.bicep" />
+    <File Path="infra/rbac.bicep" />
+    <File Path="infra/service-bus.bicep" />
+  </Folder>
+  <Folder Name="/Pipelines/">
+    <File Path=".github/workflows/azure-deploy.yml" />
+    <File Path=".github/workflows/pr-readiness.yml" />
+    <File Path=".github/workflows/package-publish.yml" />
+  </Folder>
+  <Project Path="src/Niobium.AI.Agent.Driver.Integration.Tests/Niobium.AI.Agent.Driver.Integration.Tests.csproj" />
+  <Project Path="src/Niobium.AI.Agent.Driver.Server/Niobium.AI.Agent.Driver.Server.csproj" />
+  <Project Path="src/Niobium.AI.Agent.Driver.Server.Tests/Niobium.AI.Agent.Driver.Server.Tests.csproj" />
+</Solution>
