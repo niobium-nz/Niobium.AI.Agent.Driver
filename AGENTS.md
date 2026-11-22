@@ -19,7 +19,7 @@ Use `rg-niobium-<service-slug>-<env>` for resource groups and
 vaults. Functions host/package storage uses `<prefix>sts<env>` and application
 data storage uses `<prefix>std<env>`.
 Driver uses the service slug `agents` and compact prefix `niobiumagents`.
-[Shared Azure naming guide](https://github.com/niobium-nz/Niobium.DevOps/blob/main/docs/azure-resource-naming.md)
+[Azure naming guide](https://github.com/niobium-nz/Niobium.DevOps/blob/453d80db4c965223623e1dbacd9775b929e09a07/docs/azure-resource-naming.md) · [Current DevOps documentation](https://github.com/niobium-nz/Niobium.DevOps/tree/main/docs)
 
 Driver uses West US 2 and Azure's default Functions hostname. The separate
 application data account starts empty. [Test and production names](README.md#azure-naming-and-resources)
