@@ -9,6 +9,8 @@
 5. Resolve threads. Verify one valid current-head approval, successful required checks and test deployment, current main ancestry, and equality of the tested and proposed merge trees. Squash merge with the expected head SHA. A changed head goes through review and verification again.
 6. Monitor the merged commit's production deployment, GET-only verification and any applicable package publication to completion. Investigate failures through the same feature and PR process.
 
+After acquiring the production deployment lock, verify the merge commit is still on `main`. A superseded run skips deployment and points to the current commit's production run.
+
 ## Repository settings
 
 Import the [main ruleset](../.github/rulesets/main.json) in Driver’s repository settings after the first reviewed installation. The reference requires linear history and squash merges, prevents branch deletion and force pushes, blocks all code-quality severities with AI findings set to none, and requires at least 80% coverage with a maximum drop of 10. These GitHub rules complement the CI coverage gate. [Invoicing’s published ruleset](https://github.com/niobium-nz/Niobium.Invoicing/rules/26202562)

@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 # Hold the environment lock across deployment and both independent test runners.
-# Keep every pending run so each merged commit receives its own verification.
+# Keep queued feature runs so each commit receives test verification.
 concurrency:
   group: ${{ github.event_name == 'push' && 'test-deploy' || 'production-deploy' }}
   cancel-in-progress: false
@@ -192,19 +192,39 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - name: Verify current merged production commit
+        id: merge
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (!/^[0-9a-f]{40}$/.test(pr?.merge_commit_sha ?? '')) {
+              core.setFailed('An immutable merged commit is required.');
+              return;
+            }
+            const { data: branch } = await github.rest.repos.getBranch({ ...context.repo, branch: 'main' });
+            const current = branch.commit.sha === pr.merge_commit_sha;
+            core.setOutput('current', String(current));
+            if (!current) core.notice('This merge has been superseded. Follow the current main commit’s production run.');
+
       - name: Checkout
+        if: steps.merge.outputs.current == 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@v6
+        if: steps.merge.outputs.current == 'true'
         with:
           dotnet-version: '10.x.x'
 
       - name: Install azd
+        if: steps.merge.outputs.current == 'true'
         uses: Azure/setup-azd@v2
 
       - name: Azure login
+        if: steps.merge.outputs.current == 'true'
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -212,9 +232,11 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: azd login
+        if: steps.merge.outputs.current == 'true'
         run: azd auth login --federated-credential-provider github --client-id ${{ secrets.AZURE_CLIENT_ID }} --tenant-id ${{ secrets.AZURE_TENANT_ID }}
 
       - name: Publish
+        if: steps.merge.outputs.current == 'true'
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -223,14 +245,16 @@ jobs:
           APPSETTING_SERVICE_VERSION: ${{ env.buildVersion }}
         run: *deploy
       - name: Resolve production host
+        if: steps.merge.outputs.current == 'true'
         run: python scripts/test-resources.py
       - name: Run production read-only integration tests
+        if: steps.merge.outputs.current == 'true'
         timeout-minutes: 5
         env:
           READONLY_EXPECTED_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
         run: python scripts/read-only-deployment.py --report artifacts/production-read-only.json
       - name: Upload production read-only results
-        if: always()
+        if: always() && steps.merge.outputs.current == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: production-read-only-evidence-${{ github.event.pull_request.merge_commit_sha }}
