@@ -99,7 +99,11 @@ jobs:
             az group create --name "$AZURE_RESOURCE_GROUP" --location "$AZURE_LOCATION" --output none
           fi
           location=$(az group show --name "$AZURE_RESOURCE_GROUP" --query location --output tsv)
-          [[ "$location" == "$AZURE_LOCATION" ]] || { echo "Driver resource group must be in West US 2"; exit 1; }
+          if [[ "$location" != "$AZURE_LOCATION" ]]; then
+            printf 'Resource group %s reports location %s. Driver requires %s.\n' \
+              "$AZURE_RESOURCE_GROUP" "${location:-unknown}" "$AZURE_LOCATION" >&2
+            exit 1
+          fi
           azd package --no-prompt
           azd provision --no-state --no-prompt
           azd deploy --no-prompt
