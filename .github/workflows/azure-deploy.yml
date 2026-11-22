@@ -1,0 +1,262 @@
+name: Azure Deployment
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+permissions:
+  contents: read
+
+# Hold the environment lock across deployment and both independent test runners.
+# Keep queued feature runs so each commit receives test verification.
+concurrency:
+  group: ${{ github.event_name == 'push' && 'test-deploy' || 'production-deploy' }}
+  cancel-in-progress: false
+  queue: max
+
+env:
+  APP_SHORT_NAME: niobiumagents
+  AZURE_LOCATION: westus2
+  AZURE_ENV_NAME: ${{ github.event_name == 'push' && 'test' || 'prod' }}
+  AZURE_RESOURCE_GROUP: ${{ github.event_name == 'push' && 'rg-niobium-agents-test' || 'rg-niobium-agents-prod' }}
+  buildVersion: '${{ vars.MAJOR_VERSION }}.${{ vars.MINOR_VERSION }}.${{ github.run_number }}'
+  SourceRevisionId: '${{ github.event.pull_request.merge_commit_sha || github.sha }}'
+
+jobs:
+  verify:
+    name: Build and local tests
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Restore
+        run: dotnet restore Niobium.AI.Agent.Driver.slnx --nologo
+      - name: Build
+        run: dotnet build Niobium.AI.Agent.Driver.slnx --configuration Release --no-restore --nologo
+      - name: Compile Azure infrastructure
+        run: az bicep build --file infra/main.bicep --outfile "$RUNNER_TEMP/driver-infra.json"
+      - name: Delivery policy tests
+        run: |
+          node --test scripts/delivery-policy.test.cjs
+          python -m unittest discover -s scripts -p "test_*.py"
+      - name: Unit tests with coverage
+        run: dotnet test --project src/Niobium.AI.Agent.Driver.Server.Tests/Niobium.AI.Agent.Driver.Server.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory artifacts/unit
+      - name: Local integration tests with coverage
+        run: dotnet test --project src/Niobium.AI.Agent.Driver.Integration.Tests/Niobium.AI.Agent.Driver.Integration.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory artifacts/local-integration
+      - name: Check application coverage
+        run: python scripts/check-coverage.py artifacts/unit/coverage.cobertura.xml artifacts/local-integration/coverage.cobertura.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: local-test-evidence-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
+
+  test:
+    name: Deploy test and run integration
+    if: github.event_name == 'push'
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: test
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x.x'
+      - uses: Azure/setup-azd@v2
+      - name: Azure login
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: azd login
+        run: azd auth login --federated-credential-provider github --client-id ${{ secrets.AZURE_CLIENT_ID }} --tenant-id ${{ secrets.AZURE_TENANT_ID }}
+      - name: Publish
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          IS_INTERACTIVE_DEPLOYER: 'false'
+          APPSETTING_SERVICE_NAME: 'Niobium.AI.Agent.Driver.Server.Test'
+          APPSETTING_SERVICE_VERSION: '${{ env.buildVersion }}-prerelease'
+        run: &deploy |
+          set -euo pipefail
+          [[ "$buildVersion" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Set MAJOR_VERSION and MINOR_VERSION"; exit 1; }
+          printf 'Checking whether Azure resource group %s exists.\n' "$AZURE_RESOURCE_GROUP"
+          exists=$(az group exists --name "$AZURE_RESOURCE_GROUP" --output tsv)
+          if [[ "$exists" == "false" ]]; then
+            printf 'Creating Azure resource group %s in %s.\n' "$AZURE_RESOURCE_GROUP" "$AZURE_LOCATION"
+            az group create --name "$AZURE_RESOURCE_GROUP" --location "$AZURE_LOCATION" --output none
+          fi
+          printf 'Reading the location of Azure resource group %s.\n' "$AZURE_RESOURCE_GROUP"
+          location=$(az group show --name "$AZURE_RESOURCE_GROUP" --query location --output tsv)
+          if [[ "$location" != "$AZURE_LOCATION" ]]; then
+            printf 'Resource group %s reports location %s. Driver requires %s.\n' \
+              "$AZURE_RESOURCE_GROUP" "${location:-unknown}" "$AZURE_LOCATION" >&2
+            exit 1
+          fi
+          printf 'Azure resource group %s is in %s.\n' "$AZURE_RESOURCE_GROUP" "$location"
+          azd package --no-prompt
+          azd provision --no-state --no-prompt
+          azd deploy --no-prompt
+      - name: Resolve deployed test host
+        run: python scripts/test-resources.py
+      - name: Run deployed integration tests
+        timeout-minutes: 5
+        env:
+          READONLY_EXPECTED_COMMIT: ${{ github.sha }}
+        run: python scripts/read-only-deployment.py --report artifacts/deployed/health.json
+      - name: Upload deployed test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployed-test-evidence-${{ github.sha }}
+          path: artifacts/deployed/
+          if-no-files-found: error
+
+  trusted-test:
+    name: Verify trusted deployed integration
+    if: github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+    environment: test
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Resolve reviewed test harness
+        id: source
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data: main } = await github.rest.repos.getBranch({ ...context.repo, branch: 'main' });
+            const sha = main.commit.sha;
+            core.setOutput('sha', sha);
+            try {
+              await github.rest.repos.getContent({ ...context.repo, ref: sha,
+                path: 'scripts/read-only-deployment.py' });
+              core.setOutput('available', 'true');
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              // First installation cannot certify itself. Readiness rejects the missing trusted step.
+              core.warning('Main has no reviewed harness yet. Candidate tests are evidence only; administrative activation is still required.');
+              core.setOutput('available', 'false');
+            }
+      - uses: actions/checkout@v4
+        if: steps.source.outputs.available == 'true'
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+          persist-credentials: false
+      - name: Azure login
+        if: steps.source.outputs.available == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Resolve trusted test host
+        if: steps.source.outputs.available == 'true'
+        run: python scripts/test-resources.py
+      - name: Run trusted deployed integration tests at ${{ steps.source.outputs.sha }}
+        if: steps.source.outputs.available == 'true'
+        timeout-minutes: 5
+        env:
+          READONLY_EXPECTED_COMMIT: ${{ github.sha }}
+        run: python scripts/read-only-deployment.py --report artifacts/deployed/health.json
+      - name: Upload trusted deployed test results
+        if: always() && steps.source.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-deployed-test-evidence-${{ github.sha }}-${{ steps.source.outputs.sha }}
+          path: artifacts/deployed/
+          if-no-files-found: error
+
+  prod:
+    name: Deploy production and run read-only integration
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Verify current merged production commit
+        id: merge
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (!/^[0-9a-f]{40}$/.test(pr?.merge_commit_sha ?? '')) {
+              core.setFailed('An immutable merged commit is required.');
+              return;
+            }
+            const { data: branch } = await github.rest.repos.getBranch({ ...context.repo, branch: 'main' });
+            const current = branch.commit.sha === pr.merge_commit_sha;
+            core.setOutput('current', String(current));
+            if (!current) core.notice('This merge has been superseded. Follow the current main commit’s production run.');
+
+      - name: Checkout
+        if: steps.merge.outputs.current == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        if: steps.merge.outputs.current == 'true'
+        with:
+          dotnet-version: '10.x.x'
+
+      - name: Install azd
+        if: steps.merge.outputs.current == 'true'
+        uses: Azure/setup-azd@v2
+
+      - name: Azure login
+        if: steps.merge.outputs.current == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: azd login
+        if: steps.merge.outputs.current == 'true'
+        run: azd auth login --federated-credential-provider github --client-id ${{ secrets.AZURE_CLIENT_ID }} --tenant-id ${{ secrets.AZURE_TENANT_ID }}
+
+      - name: Publish
+        if: steps.merge.outputs.current == 'true'
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          IS_INTERACTIVE_DEPLOYER: 'false'
+          APPSETTING_SERVICE_NAME: 'Niobium.AI.Agent.Driver.Server.Prod'
+          APPSETTING_SERVICE_VERSION: ${{ env.buildVersion }}
+        run: *deploy
+      - name: Resolve production host
+        if: steps.merge.outputs.current == 'true'
+        run: python scripts/test-resources.py
+      - name: Run production read-only integration tests
+        if: steps.merge.outputs.current == 'true'
+        timeout-minutes: 5
+        env:
+          READONLY_EXPECTED_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
+        run: python scripts/read-only-deployment.py --report artifacts/production-read-only.json
+      - name: Upload production read-only results
+        if: always() && steps.merge.outputs.current == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-read-only-evidence-${{ github.event.pull_request.merge_commit_sha }}
+          path: artifacts/production-read-only.json
+          if-no-files-found: error

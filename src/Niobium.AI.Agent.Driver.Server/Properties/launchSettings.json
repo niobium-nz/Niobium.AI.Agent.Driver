@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "Niobium.AI.Agent.Driver.Server": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7189",
+      "launchBrowser": false
+    }
+  }
+}

@@ -1,0 +1,30 @@
+name: niobiumagents
+resourceGroup: ${AZURE_RESOURCE_GROUP}
+
+hooks:
+  preprovision:
+    shell: pwsh
+    run: ./infra/scripts/SetAppSettings.ps1
+  postprovision:
+    - shell: pwsh
+      run: ./infra/scripts/SetKeyVaultSecrets.ps1
+    - shell: pwsh
+      run: ./infra/scripts/ClearAppSettings.ps1
+
+infra:
+  provider: bicep
+  layers:
+    - name: niobiumagents-infra
+      path: ./infra
+
+services:
+  niobiumagents:
+    project: ./src/Niobium.AI.Agent.Driver.Server
+    language: csharp
+    host: function
+    hooks:
+      prepackage:
+        run: dotnet test --solution ../../Niobium.AI.Agent.Driver.slnx --configuration Release
+
+pipeline:
+  provider: github
