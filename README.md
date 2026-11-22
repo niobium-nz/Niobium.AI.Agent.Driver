@@ -38,7 +38,7 @@ Use the service slug in resource groups and the compact prefix in resource names
 | Log Analytics | `niobiumagents-log-test` | `niobiumagents-log-prod` |
 | Key Vault | `niobiumagents-kv-test` | `niobiumagents-kv-prod` |
 
-Storage account names concatenate the prefix, `st`, a purpose letter (`s` for host storage or `d` for data), and the environment. Other resources take `{prefix}-{abbreviation}-{environment}`. The deployment discovers the default HTTPS hostname from the Function App’s ARM properties. The separate data account starts with zero application tables. The deployment has no Service Bus resources or custom domain binding.
+Storage account names concatenate the prefix, `st`, a purpose letter (`s` for deployment packages or `d` for application data), and the environment. Other resources take `{prefix}-{abbreviation}-{environment}`. The deployment discovers the default HTTPS hostname from the Function App’s ARM properties. The separate data account starts with zero application tables. The deployment has no Service Bus resources or custom domain binding.
 
 ## GitHub and Azure configuration
 
