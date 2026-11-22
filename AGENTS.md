@@ -14,6 +14,8 @@ Check the working directory, branch, commit and `git status --short` before edit
 
 ## Infrastructure
 
+Use the approved Azure naming pattern for future work. Resource groups use `rg-niobium-agents-{test|prod}`. Resource names use the compact prefix `niobiumagents`, the resource abbreviation and the same environment suffix. Storage names omit separators and distinguish host (`sts`) from application data (`std`). Use West US 2 and discover the default Functions hostname from Azure. The data account starts empty. The current topology uses the HTTP host and a separate Table data account. [Names for both environments](README.md#azure-naming-and-resources)
+
 Keep host resources and runtime settings in `infra/function-app.bicep`. Put service-owned resources in `infra/main.bicep` and pass derived settings through `appSettings`. Configure each environment through the same modules. Explicitly project GitHub environment inputs into the runner. Ordinary `APPSETTING_` values become Bicep settings. For `APPSETTING_KV_` variables, only names enter the parameters. The postprovision hook writes the values to Key Vault and refreshes the app's references after successful writes. Keep credentials and local Azure state outside source control.
 
 ## Delivery

@@ -43,23 +43,19 @@ class DeployedHealthTests(unittest.TestCase):
         opener.open.assert_not_called()
         self.assertIsNone(health.NoRedirect().redirect_request(None, None, 302, None, None, "https://other.invalid"))
 
-    def test_origin_is_read_from_the_named_function_and_bound_production_domain(self):
+    def test_origin_is_read_from_the_named_function_in_each_environment(self):
         for environment in ("test", "prod"):
             function = f"driver-func-{environment}"
-            site = {"defaultHostName": f"{function}-abcd.region.azurewebsites.net", "hostNames": ["api.example.invalid"]}
-            with patch.object(resources.subprocess, "check_output", return_value=json.dumps(site)) as azure:
-                origin = resources.resolve_origin(environment, "driver", "driver-group", "api.example.invalid")
+            hostname = f"{function}-abcd.region.azurewebsites.net"
+            with patch.object(resources.subprocess, "check_output", return_value=hostname) as azure:
+                origin = resources.resolve_origin(environment, "driver", "driver-group")
                 args = azure.call_args.args[0]
                 self.assertEqual(args[:3], ["az", "resource", "show"])
                 self.assertEqual(args[args.index("--resource-group") + 1], "driver-group")
                 self.assertEqual(args[args.index("--name") + 1], function)
-                hostname = "api.example.invalid" if environment == "prod" else site["defaultHostName"]
                 self.assertEqual(origin, "https://" + hostname)
 
-    def test_unexpected_sites_and_unbound_domains_fail(self):
-        for site in [
-            {"defaultHostName": "another.azurewebsites.net", "hostNames": []},
-            {"defaultHostName": "driver-func-prod.azurewebsites.net", "hostNames": ["other.example.invalid"]},
-        ]:
-            with patch.object(resources.subprocess, "check_output", return_value=json.dumps(site)), self.assertRaises(ValueError):
-                resources.resolve_origin("prod", "driver", "driver-group", "api.example.invalid")
+    def test_unexpected_default_host_fails(self):
+        with patch.object(resources.subprocess, "check_output", return_value="other.azurewebsites.net"):
+            with self.assertRaises(ValueError):
+                resources.resolve_origin("test", "driver", "driver-group")

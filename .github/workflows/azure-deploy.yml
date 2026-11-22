@@ -18,6 +18,10 @@ concurrency:
   queue: max
 
 env:
+  APP_SHORT_NAME: niobiumagents
+  AZURE_LOCATION: westus2
+  AZURE_ENV_NAME: ${{ github.event_name == 'push' && 'test' || 'prod' }}
+  AZURE_RESOURCE_GROUP: ${{ github.event_name == 'push' && 'rg-niobium-agents-test' || 'rg-niobium-agents-prod' }}
   buildVersion: '${{ vars.MAJOR_VERSION }}.${{ vars.MINOR_VERSION }}.${{ github.run_number }}'
   SourceRevisionId: '${{ github.event.pull_request.merge_commit_sha || github.sha }}'
 
@@ -66,10 +70,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    env:
-      AZURE_ENV_NAME: test
-      APP_SHORT_NAME: ${{ vars.APP_SHORT_NAME }}
-      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v6
@@ -86,22 +86,20 @@ jobs:
         run: azd auth login --federated-credential-provider github --client-id ${{ secrets.AZURE_CLIENT_ID }} --tenant-id ${{ secrets.AZURE_TENANT_ID }}
       - name: Publish
         env:
-          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
-          AZURE_ENV_NAME: 'test'
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
           IS_INTERACTIVE_DEPLOYER: 'false'
-          SERVICE_BUS_QUEUE_NAMES: ${{ vars.SERVICE_BUS_QUEUE_NAMES }}
-          STORAGE_TABLE_NAMES: ${{ vars.STORAGE_TABLE_NAMES }}
-          CUSTOM_DOMAIN_NAME: ${{ secrets.CUSTOM_DOMAIN_NAME }}
           APPSETTING_SERVICE_NAME: 'Niobium.AI.Agent.Driver.Server.Test'
           APPSETTING_SERVICE_VERSION: '${{ env.buildVersion }}-prerelease'
-        run: |
+        run: &deploy |
           set -euo pipefail
-          : "${AZURE_RESOURCE_GROUP:?Set the Driver resource group}" "${AZURE_LOCATION:?Set the Azure region}"
-          [[ "$APP_SHORT_NAME" =~ ^[a-z][a-z0-9]{0,15}$ ]] || { echo "Set a valid Driver APP_SHORT_NAME"; exit 1; }
           [[ "$buildVersion" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Set MAJOR_VERSION and MINOR_VERSION"; exit 1; }
+          exists=$(az group exists --name "$AZURE_RESOURCE_GROUP" --output tsv)
+          if [[ "$exists" == "false" ]]; then
+            az group create --name "$AZURE_RESOURCE_GROUP" --location "$AZURE_LOCATION" --output none
+          fi
+          location=$(az group show --name "$AZURE_RESOURCE_GROUP" --query location --output tsv)
+          [[ "$location" == "$AZURE_LOCATION" ]] || { echo "Driver resource group must be in West US 2"; exit 1; }
           azd package --no-prompt
           azd provision --no-state --no-prompt
           azd deploy --no-prompt
@@ -129,10 +127,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    env:
-      AZURE_ENV_NAME: test
-      APP_SHORT_NAME: ${{ vars.APP_SHORT_NAME }}
-      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
     steps:
       - name: Resolve reviewed test harness
         id: source
@@ -186,11 +180,6 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
     environment: prod
-    env:
-      AZURE_ENV_NAME: prod
-      APP_SHORT_NAME: ${{ vars.APP_SHORT_NAME }}
-      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-      CUSTOM_DOMAIN_NAME: ${{ secrets.CUSTOM_DOMAIN_NAME }}
     permissions:
       contents: read
       id-token: write
@@ -219,25 +208,12 @@ jobs:
 
       - name: Publish
         env:
-          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
-          AZURE_ENV_NAME: 'prod'
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          CUSTOM_DOMAIN_NAME: ${{ secrets.CUSTOM_DOMAIN_NAME }}
           IS_INTERACTIVE_DEPLOYER: 'false'
-          SERVICE_BUS_QUEUE_NAMES: ${{ vars.SERVICE_BUS_QUEUE_NAMES }}
-          STORAGE_TABLE_NAMES: ${{ vars.STORAGE_TABLE_NAMES }}
           APPSETTING_SERVICE_NAME: 'Niobium.AI.Agent.Driver.Server.Prod'
           APPSETTING_SERVICE_VERSION: ${{ env.buildVersion }}
-        run: |
-          set -euo pipefail
-          : "${AZURE_RESOURCE_GROUP:?Set the Driver resource group}" "${AZURE_LOCATION:?Set the Azure region}"
-          [[ "$APP_SHORT_NAME" =~ ^[a-z][a-z0-9]{0,15}$ ]] || { echo "Set a valid Driver APP_SHORT_NAME"; exit 1; }
-          [[ "$buildVersion" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Set MAJOR_VERSION and MINOR_VERSION"; exit 1; }
-          azd package --no-prompt
-          azd provision --no-state --no-prompt
-          azd deploy --no-prompt
+        run: *deploy
       - name: Resolve production host
         run: python scripts/test-resources.py
       - name: Run production read-only integration tests

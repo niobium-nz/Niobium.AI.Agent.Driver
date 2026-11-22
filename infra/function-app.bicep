@@ -6,9 +6,6 @@ param environmentName string
 @description('Short name used as a prefix for Azure resources. Keep it globally unique where required.')
 param appShortName string
 
-@description('Logical service key in azure.yaml.')
-param azdServiceName string
-
 @description('Name of the shared user-assigned managed identity used for identitying the function app.')
 param userAssignedManagedIdentityName string
 
@@ -57,6 +54,11 @@ var allAppSettings = union(
         : nextItem.value
     })),
     {
+      AzureWebJobsStorage__blobServiceUri: storageAccount.outputs.serviceEndpoints.blob
+      AzureWebJobsStorage__queueServiceUri: storageAccount.outputs.serviceEndpoints.queue
+      AzureWebJobsStorage__tableServiceUri: storageAccount.outputs.serviceEndpoints.table
+      AzureWebJobsStorage__credential: 'managedidentity'
+      AzureWebJobsStorage__clientId: sharedManagedIdentity.properties.clientId
       AZURE_FUNCTIONS_ENVIRONMENT: environmentName
       APPLICATIONINSIGHTS_AUTHENTICATION_STRING: 'ClientId=${sharedManagedIdentity.properties.clientId};Authorization=AAD'
       AzureFunctionsJobHost__logging__logLevel__default: 'Information'
@@ -110,7 +112,7 @@ module functionApp 'br/public:avm/res/web/site:0.24.0' = {
     kind: 'functionapp,linux'
     name: functionAppName
     location: location
-    tags: { 'azd-service-name': azdServiceName }
+    tags: { 'azd-service-name': appShortName }
     serverFarmResourceId: appServicePlan.outputs.resourceId
     keyVaultAccessIdentityResourceId: sharedManagedIdentity.id
     managedIdentities: {
@@ -208,7 +210,7 @@ module rbac 'rbac.bicep' = {
 // Role assignment for Storage Account (Blob) - Deployer Identity
 var deployerPrincipalId = deployer().objectId
 var storageRoleDefinitionId = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b' //Storage Blob Data Owner role
-var keyVaultSecretRoleDefinitionId = 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7' // Key Vault Secret Reader role ID
+var keyVaultSecretRoleDefinitionId = 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7' // Key Vault Secrets Officer
 resource storageAccountResource 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
   name: storageAccountName
   dependsOn: [

@@ -1,4 +1,4 @@
-name: niobiumaiagentdriver
+name: niobiumagents
 resourceGroup: ${AZURE_RESOURCE_GROUP}
 
 hooks:
@@ -14,11 +14,11 @@ hooks:
 infra:
   provider: bicep
   layers:
-    - name: niobiumaiagentdriver-infra
+    - name: niobiumagents-infra
       path: ./infra
 
 services:
-  niobiumaiagentdriver:
+  niobiumagents:
     project: ./src/Niobium.AI.Agent.Driver.Server
     language: csharp
     host: function
