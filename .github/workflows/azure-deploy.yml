@@ -39,9 +39,13 @@ jobs:
         with:
           node-version: '22'
       - name: Restore
-        run: dotnet restore Niobium.AI.Agent.Driver.slnx --nologo
+        run: |
+          dotnet restore Niobium.AI.Agent.Driver.slnx --nologo
+          dotnet restore src/Niobium.AI.Agent.Driver.Deployment.Tests/Niobium.AI.Agent.Driver.Deployment.Tests.csproj --nologo
       - name: Build
-        run: dotnet build Niobium.AI.Agent.Driver.slnx --configuration Release --no-restore --nologo
+        run: |
+          dotnet build Niobium.AI.Agent.Driver.slnx --configuration Release --no-restore --nologo
+          dotnet build src/Niobium.AI.Agent.Driver.Deployment.Tests/Niobium.AI.Agent.Driver.Deployment.Tests.csproj --configuration Release --no-restore --nologo
       - name: Compile Azure infrastructure
         run: az bicep build --file infra/main.bicep --outfile "$RUNNER_TEMP/driver-infra.json"
       - name: Delivery policy tests
@@ -113,11 +117,14 @@ jobs:
           azd deploy --no-prompt
       - name: Resolve deployed test host
         run: python scripts/test-resources.py
-      - name: Run deployed integration tests
+      - name: Verify deployed test commit
         timeout-minutes: 5
         env:
           READONLY_EXPECTED_COMMIT: ${{ github.sha }}
         run: python scripts/read-only-deployment.py --report artifacts/deployed/health.json
+      - name: Run deployed integration tests
+        timeout-minutes: 5
+        run: dotnet test --project src/Niobium.AI.Agent.Driver.Deployment.Tests/Niobium.AI.Agent.Driver.Deployment.Tests.csproj --configuration Release --report-trx --results-directory artifacts/deployed
       - name: Upload deployed test results
         if: always()
         uses: actions/upload-artifact@v4
