@@ -2,7 +2,8 @@
 const WORKFLOW = 'azure-deploy.yml';
 const WORKFLOW_PATH = `.github/workflows/${WORKFLOW}`;
 const PIPELINE_FILES = [WORKFLOW_PATH, 'azure.yaml', 'scripts/check-coverage.py', 'scripts/test-resources.py'];
-const REQUIRED_JOBS = ['Build and local tests', 'Deploy test and run integration'];
+const CANDIDATE_DEPLOYMENT_JOB = 'Deploy test and run candidate integration';
+const REQUIRED_JOBS = ['Build and local tests', CANDIDATE_DEPLOYMENT_JOB, 'Deploy test and run integration'];
 const REQUIRED_DEPLOYMENT_STEPS = ['Verify deployed test commit', 'Run deployed integration tests'];
 const TRUSTED_TEST_JOB = 'Verify trusted deployed integration';
 
@@ -50,7 +51,7 @@ async function testedRun(github, owner, repo, sha, trustedSha, runId) {
       owner, repo, run_id: run.id, filter: 'latest', per_page: 100,
     });
     if (!REQUIRED_JOBS.every(name => jobs.some(job => job.name === name && job.conclusion === 'success'))) continue;
-    const deployment = jobs.find(job => job.name === REQUIRED_JOBS[1]);
+    const deployment = jobs.find(job => job.name === CANDIDATE_DEPLOYMENT_JOB);
     if (!REQUIRED_DEPLOYMENT_STEPS.every(name =>
       deployment.steps?.some(step => step.name === name && step.conclusion === 'success'))) continue;
     // A separate runner checks out only immutable main, including the harness, project references,

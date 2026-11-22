@@ -17,11 +17,12 @@ function fixture() {
     reviews: [{ id: 1, state: 'APPROVED', commit_id: 'head', user: { login: 'author' } }],
     runs: [{ ...run }],
     jobs: [{ name: 'Build and local tests', conclusion: 'success' },
-      { name: 'Deploy test and run integration', conclusion: 'success', steps: [
+      { name: 'Deploy test and run candidate integration', conclusion: 'success', steps: [
         { name: 'Verify deployed test commit', conclusion: 'success' },
         { name: 'Run deployed integration tests', conclusion: 'success' }] },
       { name: 'Verify trusted deployed integration', conclusion: 'success',
-        steps: [{ name: `Run trusted deployed integration tests at ${trustedSha}`, conclusion: 'success' }] }],
+        steps: [{ name: `Run trusted deployed integration tests at ${trustedSha}`, conclusion: 'success' }] },
+      { name: 'Deploy test and run integration', conclusion: 'success' }],
     comparison: { status: 'ahead' },
     created: [], statuses: [], notices: [], contentReads: [], tamperedPath: null, missingTrustedPath: null,
   };
@@ -148,14 +149,14 @@ test('skipped deployment checks and failed required jobs cannot qualify', async 
     skipped.state.jobs[1].steps.find(step => step.name === name).conclusion = 'skipped';
     await assert.rejects(testedRun(skipped.github, 'owner', 'repo', 'head', trustedSha));
   }
-  for (const job of [0, 1, 2]) for (const conclusion of ['failure', 'cancelled', 'skipped', null]) {
+  for (const job of [0, 1, 2, 3]) for (const conclusion of ['failure', 'cancelled', 'skipped', null]) {
     const input = fixture(); input.state.jobs[job].conclusion = conclusion;
     await assert.rejects(testedRun(input.github, 'owner', 'repo', 'head', trustedSha));
   }
 });
 
 test('green candidate tests cannot substitute for the trusted main harness', async () => {
-  for (const mutate of [s => { s.jobs.pop(); }, s => { s.jobs[2].steps = []; },
+  for (const mutate of [s => { s.jobs.splice(2, 1); }, s => { s.jobs[2].steps = []; },
     s => { s.jobs[2].steps[0].conclusion = 'skipped'; },
     s => { s.jobs[2].steps[0].name = 'Run trusted deployed integration tests at feature'; },
     s => { s.jobs[2].steps[0].name = `Run trusted deployed integration tests at ${'b'.repeat(40)}`; }]) {
