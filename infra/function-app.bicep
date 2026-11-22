@@ -203,7 +203,8 @@ module rbac 'rbac.bicep' = {
     managedIdentityPrincipalId: sharedManagedIdentity.properties.principalId
     appInsightsName: appInsights.outputs.name
     keyVaultName: keyVault.outputs.name
-    storageAccountNames: [storageAccount.outputs.name]
+    blobStorageAccountNames: [storageAccount.outputs.name]
+    tableStorageAccountNames: [storageAccount.outputs.name]
   }
 }
 

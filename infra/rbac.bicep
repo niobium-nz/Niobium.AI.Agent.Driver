@@ -1,6 +1,7 @@
 param managedIdentityPrincipalId string = '' // Principal ID for the Managed Identity
 param userIdentityPrincipalId string = '' // Principal ID for the User Identity
-param storageAccountNames array = []
+param blobStorageAccountNames array = []
+param tableStorageAccountNames array = []
 param appInsightsName string = ''
 param keyVaultName string = ''
 
@@ -10,8 +11,12 @@ var tableRoleDefinitionId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3' // Storage Ta
 var monitoringRoleDefinitionId = '3913510d-42f4-4e42-8a64-420c390055eb' // Monitoring Metrics Publisher role ID
 var keyVaultSecretRoleDefinitionId = '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secret Reader role ID
 
-resource storageAccounts 'Microsoft.Storage/storageAccounts@2022-09-01' existing = [for saName in storageAccountNames: {
-  name: saName
+resource blobStorageAccounts 'Microsoft.Storage/storageAccounts@2022-09-01' existing = [for accountName in blobStorageAccountNames: {
+  name: accountName
+}]
+
+resource tableStorageAccounts 'Microsoft.Storage/storageAccounts@2022-09-01' existing = [for accountName in tableStorageAccountNames: {
+  name: accountName
 }]
 
 resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing = {
@@ -23,9 +28,9 @@ resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' existing = {
 }
 
 // Role assignment for Storage Account (Blob) - Managed Identity
-resource storageRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for i in range(0, length(storageAccountNames)): if (!empty(managedIdentityPrincipalId)) {
-  name: guid(storageAccounts[i].id, managedIdentityPrincipalId, storageRoleDefinitionId) // Use managed identity ID
-  scope: storageAccounts[i]
+resource storageRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for i in range(0, length(blobStorageAccountNames)): if (!empty(managedIdentityPrincipalId)) {
+  name: guid(blobStorageAccounts[i].id, managedIdentityPrincipalId, storageRoleDefinitionId) // Use managed identity ID
+  scope: blobStorageAccounts[i]
   properties: {
     roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', storageRoleDefinitionId)
     principalId: managedIdentityPrincipalId // Use managed identity ID
@@ -34,9 +39,9 @@ resource storageRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-
 }]
 
 // Role assignment for Storage Account (Blob) - User Identity
-resource storageRoleAssignment_User 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for i in range(0, length(storageAccountNames)): if (!empty(userIdentityPrincipalId)) {
-  name: guid(storageAccounts[i].id, userIdentityPrincipalId, storageRoleDefinitionId)
-  scope: storageAccounts[i]
+resource storageRoleAssignment_User 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for i in range(0, length(blobStorageAccountNames)): if (!empty(userIdentityPrincipalId)) {
+  name: guid(blobStorageAccounts[i].id, userIdentityPrincipalId, storageRoleDefinitionId)
+  scope: blobStorageAccounts[i]
   properties: {
     roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', storageRoleDefinitionId)
     principalId: userIdentityPrincipalId // Use user identity ID
@@ -45,9 +50,9 @@ resource storageRoleAssignment_User 'Microsoft.Authorization/roleAssignments@202
 }]
 
 // Role assignment for Storage Account (Table) - Managed Identity
-resource tableRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for i in range(0, length(storageAccountNames)): if (!empty(managedIdentityPrincipalId)) {
-  name: guid(storageAccounts[i].id, managedIdentityPrincipalId, tableRoleDefinitionId) // Use managed identity ID
-  scope: storageAccounts[i]
+resource tableRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for i in range(0, length(tableStorageAccountNames)): if (!empty(managedIdentityPrincipalId)) {
+  name: guid(tableStorageAccounts[i].id, managedIdentityPrincipalId, tableRoleDefinitionId) // Use managed identity ID
+  scope: tableStorageAccounts[i]
   properties: {
     roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', tableRoleDefinitionId)
     principalId: managedIdentityPrincipalId // Use managed identity ID
@@ -56,9 +61,9 @@ resource tableRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01
 }]
 
 // Role assignment for Storage Account (Table) - User Identity
-resource tableRoleAssignment_User 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for i in range(0, length(storageAccountNames)): if (!empty(userIdentityPrincipalId)) {
-  name: guid(storageAccounts[i].id, userIdentityPrincipalId, tableRoleDefinitionId)
-  scope: storageAccounts[i]
+resource tableRoleAssignment_User 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for i in range(0, length(tableStorageAccountNames)): if (!empty(userIdentityPrincipalId)) {
+  name: guid(tableStorageAccounts[i].id, userIdentityPrincipalId, tableRoleDefinitionId)
+  scope: tableStorageAccounts[i]
   properties: {
     roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', tableRoleDefinitionId)
     principalId: userIdentityPrincipalId // Use user identity ID

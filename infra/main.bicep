@@ -69,7 +69,7 @@ module rbac 'rbac.bicep' = {
   params: {
     userIdentityPrincipalId: userIdentityPrincipalId
     managedIdentityPrincipalId: sharedManagedIdentity.outputs.principalId
-    storageAccountNames: [dataStorageAccount.outputs.name]
+    tableStorageAccountNames: [dataStorageAccount.outputs.name]
   }
 }
 
