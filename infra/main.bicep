@@ -13,6 +13,9 @@ param appShortName string
 @description('Settings for the Driver Function App.')
 param appSettings array = []
 
+@description('Application table names. Stage 1 supplies configuration tables only, not job or dispatch storage.')
+param tableNames array = []
+
 @description('Id of the user identity to be used for testing and debugging. This is not required in production. Leave empty if not needed. Can optionally use deployer().objectId if manually deployed')
 param userIdentityPrincipalId string = ''
 
@@ -22,12 +25,9 @@ param isInteractiveDeployer bool = true
 var location = resourceGroup().location
 var abbrs = loadJsonContent('./abbreviations.json')
 
-// User assigned managed identity to be used by the function app to reach storage and other dependencies
-// Assign specific roles to this identity in the RBAC module
-var sharedManagedIdentityName = '${appShortName}-${abbrs.managedIdentityUserAssignedIdentities}${environmentName}'
 module sharedManagedIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.6.0' = {
   params: {
-    name: sharedManagedIdentityName
+    name: '${appShortName}-${abbrs.managedIdentityUserAssignedIdentities}${environmentName}'
     location: location
   }
 }
@@ -39,16 +39,22 @@ module dataStorageAccount 'br/public:avm/res/storage/storage-account:0.32.0' = {
     skuName: 'Standard_LRS'
     kind: 'StorageV2'
     publicNetworkAccess: 'Enabled'
-    networkAcls: {
-      defaultAction: 'Allow'
+    networkAcls: { defaultAction: 'Allow' }
+    tableServices: {
+      tables: [for tableName in tableNames: { name: tableName }]
     }
-    tableServices: {}
   }
 }
 var dataSettings = [
   {
     name: 'StorageTableOptions__FullyQualifiedDomainName'
     value: dataStorageAccount.outputs.serviceEndpoints.table
+  }
+  {
+    // Deployment of code is not authorization to activate a billable external action.
+    // Activation is a separate reviewed change after mandatory OAuth acceptance.
+    name: 'AgentGatewayOptions__Enabled'
+    value: 'false'
   }
 ]
 

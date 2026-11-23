@@ -47,15 +47,19 @@ jobs:
           dotnet build Niobium.AI.Agent.Driver.slnx --configuration Release --no-restore --nologo
           dotnet build src/Niobium.AI.Agent.Driver.Deployment.Tests/Niobium.AI.Agent.Driver.Deployment.Tests.csproj --configuration Release --no-restore --nologo
       - name: Compile Azure infrastructure
-        run: az bicep build --file infra/main.bicep --outfile "$RUNNER_TEMP/driver-infra.json"
+        run: |
+          az bicep build --file infra/main.bicep --outfile "$RUNNER_TEMP/driver-infra.json"
+          az bicep build --file infra/gateway-auth.bicep --outfile "$RUNNER_TEMP/driver-auth.json"
       - name: Delivery policy tests
         run: |
           node --test scripts/delivery-policy.test.cjs
           python -m unittest discover -s scripts -p "test_*.py"
+      - name: Install local compatibility runtimes
+        run: npm install --global azurite@3.35.0 azure-functions-core-tools@4
       - name: Unit tests with coverage
         run: dotnet test --project src/Niobium.AI.Agent.Driver.Server.Tests/Niobium.AI.Agent.Driver.Server.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory artifacts/unit
-      - name: Local integration tests with coverage
-        run: dotnet test --project src/Niobium.AI.Agent.Driver.Integration.Tests/Niobium.AI.Agent.Driver.Integration.Tests.csproj --configuration Release --no-build --no-restore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml --results-directory artifacts/local-integration
+      - name: Local integration tests and native MCP wire compatibility
+        run: bash scripts/verify-gateway-local.sh
       - name: Check application coverage
         run: python scripts/check-coverage.py artifacts/unit/coverage.cobertura.xml artifacts/local-integration/coverage.cobertura.xml
       - uses: actions/upload-artifact@v4
@@ -232,24 +236,20 @@ jobs:
             const { data: branch } = await github.rest.repos.getBranch({ ...context.repo, branch: 'main' });
             const current = branch.commit.sha === pr.merge_commit_sha;
             core.setOutput('current', String(current));
-            if (!current) core.notice('This merge has been superseded. Follow the current main commit’s production run.');
-
+            if (!current) core.notice('This merge has been superseded. Follow the current main commit production run.');
       - name: Checkout
         if: steps.merge.outputs.current == 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           persist-credentials: false
-
       - uses: actions/setup-dotnet@v6
         if: steps.merge.outputs.current == 'true'
         with:
           dotnet-version: '10.x.x'
-
       - name: Install azd
         if: steps.merge.outputs.current == 'true'
         uses: Azure/setup-azd@v2
-
       - name: Azure login
         if: steps.merge.outputs.current == 'true'
         uses: azure/login@v3
@@ -257,11 +257,9 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: azd login
         if: steps.merge.outputs.current == 'true'
         run: azd auth login --federated-credential-provider github --client-id ${{ secrets.AZURE_CLIENT_ID }} --tenant-id ${{ secrets.AZURE_TENANT_ID }}
-
       - name: Publish
         if: steps.merge.outputs.current == 'true'
         env:
