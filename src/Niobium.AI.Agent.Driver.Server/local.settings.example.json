@@ -11,8 +11,14 @@
     "AgentGatewayOptions__MaxInputBytes": "16384",
     "AgentGatewayOptions__MaxProviderBodyBytes": "65536",
     "AgentGatewayOptions__AllowConversationReuse": "false",
+    "AgentGatewayOptions__EnableTrackedJobs": "false",
+    "AgentGatewayOptions__EnableTrackedJobAccess": "false",
+    "AgentGatewayOptions__EnableJobMaintenance": "false",
+    "AzureWebJobs.MaintainAgentJobs.Disabled": "true",
     "GatewayAuthenticationOptions__TenantId": "",
     "GatewayAuthenticationOptions__Audience": "",
-    "GatewayAuthenticationOptions__RequiredScope": "AgentGateway.Dispatch"
+    "GatewayAuthenticationOptions__RequiredScope": "AgentGateway.Dispatch",
+    "TrackedJobOptions__IdentityKey": "",
+    "TrackedJobOptions__ActiveSigningKeyVersion": ""
   }
 }

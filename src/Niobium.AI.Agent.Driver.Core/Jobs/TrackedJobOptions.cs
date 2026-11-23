@@ -18,8 +18,7 @@ public sealed class TrackedJobOptions
 
     public bool IsValid() => IsKey(IdentityKey) && IdentifierRules.IsAlias(ActiveSigningKeyVersion)
         && SigningKeys.Count is >= 1 and <= 8 && SigningKeys.ContainsKey(ActiveSigningKeyVersion)
-        && SigningKeys.All(pair => IdentifierRules.IsAlias(pair.Key) && IsKey(pair.Value)
-            && pair.Value != IdentityKey)
+        && SigningKeys.All(pair => IdentifierRules.IsAlias(pair.Key) && IsKey(pair.Value) && pair.Value != IdentityKey)
         && ResultDeadlineMinutes is >= 1 and <= 10080 && CallbackGraceMinutes is >= 1 and <= 60
         && PayloadRetentionDays is >= 1 and <= 365 && DispatchLeaseSeconds is >= 60 and <= 300
         && MaxResultBytes is >= 1 and <= 16384 && MaintenanceMaxRowsPerTick is >= 1 and <= 64
@@ -29,7 +28,8 @@ public sealed class TrackedJobOptions
     {
         if (value is null || value.Length is < 44 or > 88 || value.Any(char.IsWhiteSpace)) { return false; }
         Span<byte> bytes = stackalloc byte[64];
-        return Convert.TryFromBase64String(value, bytes, out int written) && written is >= 32 and <= 64;
+        return Convert.TryFromBase64String(value, bytes, out int written) && written is >= 32 and <= 64
+            && Convert.ToBase64String(bytes[..written]) == value;
     }
 }
 
