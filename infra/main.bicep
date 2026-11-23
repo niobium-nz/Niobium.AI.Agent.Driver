@@ -13,7 +13,7 @@ param appShortName string
 @description('Settings for the Driver Function App.')
 param appSettings array = []
 
-@description('Application table names. Stage 1 supplies configuration tables only, not job or dispatch storage.')
+@description('Generic application table list. Default parameters provision only Stage 1 configuration; tracked storage is a separate opt-in.')
 param tableNames array = []
 
 @description('Id of the user identity to be used for testing and debugging. This is not required in production. Leave empty if not needed. Can optionally use deployer().objectId if manually deployed')
@@ -51,10 +51,25 @@ var dataSettings = [
     value: dataStorageAccount.outputs.serviceEndpoints.table
   }
   {
-    // Deployment of code is not authorization to activate a billable external action.
-    // Activation is a separate reviewed change after mandatory OAuth acceptance.
+    // Code deployment is not permission to enable billable agent execution.
     name: 'AgentGatewayOptions__Enabled'
     value: 'false'
+  }
+  {
+    name: 'AgentGatewayOptions__EnableTrackedJobs'
+    value: 'false'
+  }
+  {
+    name: 'AgentGatewayOptions__EnableTrackedJobAccess'
+    value: 'false'
+  }
+  {
+    name: 'AgentGatewayOptions__EnableJobMaintenance'
+    value: 'false'
+  }
+  {
+    name: 'AzureWebJobs.MaintainAgentJobs.Disabled'
+    value: 'true'
   }
 ]
 

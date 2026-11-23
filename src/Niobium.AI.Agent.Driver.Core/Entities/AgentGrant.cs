@@ -14,6 +14,8 @@ public sealed record AgentGrant
     public bool CanDispatch { get; set; }
     public DateTimeOffset? ExpiresUtc { get; set; }
     public string WriteId { get; set; } = "";
+    public bool CanStartJob { get; set; }
+    public bool CanSubmitResult { get; set; }
 
     public static string PartitionFor(CallerContext caller) => caller.WorkspaceKey + "." + caller.PrincipalKey;
 }
