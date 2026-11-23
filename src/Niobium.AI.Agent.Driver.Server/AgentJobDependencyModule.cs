@@ -17,10 +17,12 @@ public static class AgentJobDependencyModule
     {
         builder.Services.AddDomain<AgentJobDomain, AgentJob>();
         builder.Services.AddDomain<AgentMaintenanceDomain, AgentMaintenance>();
+        builder.Services.AddDomain<AgentContinuationRouteDomain, AgentContinuationRoute>();
         builder.Services.AddOptions<TrackedJobOptions>().BindConfiguration(nameof(TrackedJobOptions))
             .Validate<IOptions<AgentGatewayOptions>>((options, gateway) => !gateway.Value.EnableTrackedJobAccess || options.IsValid(),
                 "Tracked job access requires dedicated strong keys and bounded limits.").ValidateOnStart();
         builder.Services.AddSingleton<IJobCapabilities, JobCapabilities>();
+        builder.Services.AddTransient<AgentJobFollowUpFlow>();
         builder.Services.AddTransient<AgentJobFlow>();
         builder.Services.AddTransient<AgentJobMaintenanceFlow>();
         builder.Services.AddTransient<AgentJobTools>();
@@ -29,8 +31,9 @@ public static class AgentJobDependencyModule
             .WithProperty("handoff_id", "string", "Stable event ID. Preserve this and the complete request for every retry.", true)
             .WithProperty("input", "object", "Nonblank task and optional data object. Maximum 16 KiB canonical UTF-8.", true)
             .WithProperty("result_schema", "string", "Currently agent-result.v1 only.", true)
-            .WithProperty("completion_mode", "string", "Currently store_only only. Parent continuation is not supported.", true)
-            .WithProperty("conversation_key", "string", "Optional stable conversation key, only under both reuse policies.");
+            .WithProperty("completion_mode", "string", "store_only, or notify_parent when explicitly enabled and bound by an operator.", true)
+            .WithProperty("continuation_ref", "string", "Required only for notify_parent. Operator-approved reference, never a URL or conversation key.")
+            .WithProperty("conversation_key", "string", "Optional stable target conversation key, only under both reuse policies.");
         builder.ConfigureMcpTool("submit_job_result")
             .WithProperty("job_id", "string", "Opaque job ID from your received envelope.", true)
             .WithProperty("completion_capability", "string", "Secret job-scoped capability from that envelope. Do not disclose or log it.", true)

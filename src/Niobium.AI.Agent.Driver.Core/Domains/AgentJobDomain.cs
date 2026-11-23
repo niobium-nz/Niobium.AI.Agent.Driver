@@ -4,8 +4,8 @@ using Niobium.AI.Agent.Driver.Core.Jobs;
 
 namespace Niobium.AI.Agent.Driver.Core.Domains;
 
-/// <summary>Owns durable transitions. All reads bypass cached domain snapshots and all writes are conditional replacements.</summary>
-public sealed class AgentJobDomain(Lazy<IRepository<AgentJob>> repository,
+/// <summary>Owns durable transitions. Reads bypass cached snapshots; writes are conditional replacements.</summary>
+public sealed partial class AgentJobDomain(Lazy<IRepository<AgentJob>> repository,
     IEnumerable<IDomainEventHandler<IDomain<AgentJob>>> handlers) : GenericDomain<AgentJob>(repository, handlers)
 {
     public async Task<AgentJob?> ReadCurrentAsync(CancellationToken cancellationToken)
@@ -35,7 +35,9 @@ public sealed class AgentJobDomain(Lazy<IRepository<AgentJob>> repository,
         CheckInitialized();
         if (intended.WorkspaceShard != PartitionKey || intended.JobId != RowKey || intended.ETag is not null
             || intended.DispatchStateCode != 0 || intended.ResultStateCode != 0 || intended.Attempts != 0
-            || intended.FirstAttemptUtc is not null || intended.ResultJson is not null || intended.ClaimGeneration != 0)
+            || intended.FirstAttemptUtc is not null || intended.ResultJson is not null || intended.ClaimGeneration != 0
+            || intended.ProviderStateCode != 0 || intended.ContinuationStateCode != 0 || intended.ProviderRunId is not null
+            || intended.PollGeneration != 0 || intended.ContinuationGeneration != 0)
         { throw new JobException(JobError.InvalidRequest); }
         for (int attempt = 0; attempt < 4; attempt++)
         {
@@ -80,12 +82,11 @@ public sealed class AgentJobDomain(Lazy<IRepository<AgentJob>> repository,
     }
 
     public async Task<AgentJob> RecordDispatchAsync(AgentJob claim, DispatchAgentResult outcome, DateTimeOffset now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string? providerRunId = null)
     {
         for (int attempt = 0; attempt < 4; attempt++)
         {
             AgentJob current = await ReadCurrentAsync(cancellationToken) ?? throw new JobException(JobError.JobUnavailable);
-            // A lease is a fencing precondition for storage, not a guarantee about external execution.
             if (current.DispatchStateCode != (int)JobDispatchState.Sending || current.LeaseOwner != claim.LeaseOwner
                 || current.ClaimGeneration != claim.ClaimGeneration || current.LeaseUntilUtc <= now
                 || current.LeaseUntilUtc is null || claim.JobId != current.JobId || claim.WorkspaceShard != current.WorkspaceShard)
@@ -97,9 +98,11 @@ public sealed class AgentJobDomain(Lazy<IRepository<AgentJob>> repository,
                 DispatchState.NotDispatched => (int)JobDispatchState.Held,
                 _ => (int)JobDispatchState.Unknown
             };
-            // Use the freshly loaded row so a callback committed before this response is preserved.
             AgentJob next = current with { DispatchStateCode = state, LeaseOwner = null, LeaseUntilUtc = null,
                 LastErrorCode = outcome.ErrorCode is GatewayError error ? (int)error : null };
+            if (state == (int)JobDispatchState.Accepted && current.ObserveProviderRun && JobFollowUp.IsRunId(providerRunId))
+            { next = next with { ProviderRunId = providerRunId, NextPollUtc = now }; }
+            // Current snapshot preserves callbacks, outbox and observations committed by another writer.
             AgentJob? saved = await TryPersistAsync(next, false, cancellationToken);
             if (saved is not null) { return saved; }
         }
@@ -127,11 +130,14 @@ public sealed class AgentJobDomain(Lazy<IRepository<AgentJob>> repository,
                 { throw new JobException(JobError.JobConflict); }
                 return Receipt(current, true);
             }
+            // Single-entity durable outbox: saving a result and scheduling notification is one conditional write.
             AgentJob next = current with
             {
                 ResultStateCode = (int)JobResultState.Available, OutcomeCode = (int)request.Outcome,
                 ResultJson = json, ResultHash = hash, ResultReceivedUtc = now,
-                LateArrival = now > current.ResultDeadlineUtc, PayloadPurgeAfterUtc = now.AddDays(options.PayloadRetentionDays)
+                LateArrival = now > current.ResultDeadlineUtc, PayloadPurgeAfterUtc = now.AddDays(options.PayloadRetentionDays),
+                ContinuationStateCode = current.CompletionModeCode == (int)JobCompletionMode.NotifyParent
+                    ? (int)JobContinuationState.Pending : (int)JobContinuationState.NotRequested
             };
             AgentJob? saved = await TryPersistAsync(next, false, cancellationToken);
             if (saved is not null) { return Receipt(saved, false); }
@@ -149,6 +155,13 @@ public sealed class AgentJobDomain(Lazy<IRepository<AgentJob>> repository,
             if (next.DispatchStateCode == (int)JobDispatchState.Sending && (next.LeaseUntilUtc is null || next.LeaseUntilUtc <= now))
             { next = next with { DispatchStateCode = (int)JobDispatchState.Held, LeaseOwner = null, LeaseUntilUtc = null,
                 LastErrorCode = (int)GatewayError.UpstreamOutcomeUnknown }; }
+            if (next.ContinuationStateCode == (int)JobContinuationState.Sending
+                && (next.ContinuationLeaseUntilUtc is null || next.ContinuationLeaseUntilUtc <= now))
+            { next = next with { ContinuationStateCode = (int)JobContinuationState.Held,
+                ContinuationLeaseOwner = null, ContinuationLeaseUntilUtc = null,
+                ContinuationErrorCode = (int)GatewayError.UpstreamOutcomeUnknown }; }
+            if (next.ContinuationStateCode == (int)JobContinuationState.Pending && next.ContinuationExpiresUtc <= now)
+            { next = next with { ContinuationStateCode = (int)JobContinuationState.Held, ContinuationErrorCode = (int)GatewayError.Forbidden }; }
             if (next.ResultStateCode == (int)JobResultState.Pending && now >= next.ResultDeadlineUtc)
             {
                 next = next with { ResultStateCode = (int)JobResultState.DeadlineExceeded };
@@ -159,10 +172,12 @@ public sealed class AgentJobDomain(Lazy<IRepository<AgentJob>> repository,
             if (next.ResultStateCode == (int)JobResultState.DeadlineExceeded && now >= next.CapabilityExpiresUtc && knownDisposition)
             { next = next with { ResultStateCode = (int)JobResultState.ClosedWithoutResult,
                 PayloadPurgeAfterUtc = next.CapabilityExpiresUtc.AddDays(retentionDays) }; }
-            if (knownDisposition && next.PayloadPurgeAfterUtc <= now
+            bool notificationFinished = next.ContinuationStateCode is (int)JobContinuationState.NotRequested or (int)JobContinuationState.Accepted;
+            // Retain payload while a capability can still validly retry, or notification needs reconciliation.
+            if (knownDisposition && notificationFinished && now >= next.CapabilityExpiresUtc && next.PayloadPurgeAfterUtc <= now
                 && next.ResultStateCode is (int)JobResultState.Available or (int)JobResultState.ClosedWithoutResult)
             { next = next with { ResultStateCode = (int)JobResultState.Purged, RequestJson = null,
-                ResultJson = null, ProviderConversationKey = null }; }
+                ResultJson = null, ProviderConversationKey = null, ParentConversationKey = null }; }
             if (next == current) { return current; }
             AgentJob? saved = await TryPersistAsync(next, false, cancellationToken);
             if (saved is not null) { return saved; }
@@ -170,7 +185,6 @@ public sealed class AgentJobDomain(Lazy<IRepository<AgentJob>> repository,
         throw new JobException(JobError.StorageConflict);
     }
 
-    /// <summary>One-row pages give a stable persisted continuation after each action and bound per-tick work.</summary>
     public Task<EntityBag<AgentJob>> ReadPageAsync(string workspaceShard, string? cursor, CancellationToken cancellationToken) =>
         Repository.GetAsync(workspaceShard, 1, cursor, cancellationToken: cancellationToken);
 
@@ -185,14 +199,10 @@ public sealed class AgentJobDomain(Lazy<IRepository<AgentJob>> repository,
         AgentJob intended = next with { WriteId = Guid.NewGuid().ToString("N") };
         try
         {
-            // Keep an untouched intended snapshot even if an adapter mutates the submitted instance.
             if (create) { _ = await Repository.CreateAsync([intended with { }], cancellationToken: cancellationToken); }
             else { _ = await Repository.UpdateAsync([intended with { }], cancellationToken: cancellationToken); }
         }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
-        {
-            // A write response may be lost. Reconcile only this exact complete write, never adopt another writer's tag.
-        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested) { }
         AgentJob? observed = await ReadCurrentAsync(cancellationToken);
         return observed is not null && (observed with { ETag = null }) == (intended with { ETag = null }) ? observed : null;
     }

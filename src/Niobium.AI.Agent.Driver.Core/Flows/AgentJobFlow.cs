@@ -7,13 +7,14 @@ using Niobium.AI.Agent.Driver.Core.Jobs;
 
 namespace Niobium.AI.Agent.Driver.Core.Flows;
 
-/// <summary>Coordinates opt-in store-only jobs. Domains own authorization and conditional state transitions.</summary>
+/// <summary>Coordinates opt-in tracked jobs. Domains own authorization and conditional state transitions.</summary>
 public sealed class AgentJobFlow(
     IDomainRepository<AgentRegistrationDomain, AgentRegistration> registrations,
     IDomainRepository<AgentGrantDomain, AgentGrant> grants,
     IDomainRepository<AgentJobDomain, AgentJob> jobs,
     IWorkspaceAgentClient client, IJobCapabilities capabilities,
-    IOptions<AgentGatewayOptions> gateway, IOptions<TrackedJobOptions> settings, TimeProvider clock)
+    IOptions<AgentGatewayOptions> gateway, IOptions<TrackedJobOptions> settings, TimeProvider clock,
+    AgentJobFollowUpFlow? followUps = null)
 {
     public async Task<AgentJobStatus> StartAsync(StartAgentJobRequest request, CallerContext caller, CancellationToken cancellationToken)
     {
@@ -31,6 +32,7 @@ public sealed class AgentJobFlow(
         DateTimeOffset now = DateTimeOffset.FromUnixTimeSeconds(clock.GetUtcNow().ToUnixTimeSeconds());
         AgentJob intended = new()
         {
+            Version = options.EnableProviderRunPolling ? 2 : 1, ObserveProviderRun = options.EnableProviderRunPolling,
             WorkspaceShard = AgentJob.PartitionFor(caller.WorkspaceKey, id), JobId = id,
             WorkspaceKey = caller.WorkspaceKey, InitiatorPrincipalKey = caller.PrincipalKey,
             TargetAgent = target.TargetAgent, HandoffId = request.HandoffId,
@@ -43,8 +45,12 @@ public sealed class AgentJobFlow(
             ProviderConversationKey = request.ConversationKey is null ? null : StableIdentity.Derive(
                 "niobium-job-conversation-v1", caller.WorkspaceKey, caller.PrincipalKey, target.TargetAgent, request.ConversationKey)
         };
+        if (request.CompletionMode == JobCompletionMode.NotifyParent)
+        {
+            if (followUps is null) { throw new JobException(JobError.ConfigurationUnavailable); }
+            intended = await followUps.BindAsync(intended, request, caller, cancellationToken);
+        }
         intended.RequireValid();
-        // Check escaped provider-envelope size, including the signed capability, before creating a durable job.
         _ = JobWire.Prepare(intended, capabilities, options.MaxProviderBodyBytes);
         AgentJobDomain domain = await DomainAsync(caller.WorkspaceKey, id, cancellationToken);
         AgentJob registered = await domain.RegisterAsync(intended, cancellationToken);
@@ -80,7 +86,7 @@ public sealed class AgentJobFlow(
         return job.Result();
     }
 
-    /// <summary>Used by start and maintenance. Only a confirmed, never-attempted registration can acquire a send claim.</summary>
+    /// <summary>Only a confirmed, never-attempted registration can acquire a send claim.</summary>
     public async Task<AgentJob> DispatchRegisteredAsync(AgentJob snapshot, CancellationToken cancellationToken)
     {
         CallerContext owner = new(snapshot.WorkspaceKey, snapshot.InitiatorPrincipalKey, true);
@@ -94,11 +100,15 @@ public sealed class AgentJobFlow(
         RequireBinding(current, target);
         PreparedDispatch prepared = JobWire.Prepare(current, capabilities, gateway.Value.MaxProviderBodyBytes);
         string credential = gateway.Value.CredentialAliases[current.CredentialAlias];
+        bool observe = current.ObserveProviderRun && gateway.Value.EnableProviderRunPolling;
+        if (observe && client is not IWorkspaceAgentRunClient) { throw new JobException(JobError.ConfigurationUnavailable); }
         AgentJob? claim = await domain.ClaimDispatchAsync(Guid.NewGuid().ToString("N"), clock.GetUtcNow(),
             settings.Value.DispatchLeaseSeconds, cancellationToken);
         if (claim is null) { return await domain.ReadCurrentAsync(cancellationToken) ?? throw new JobException(JobError.JobUnavailable); }
-        DispatchAgentResult outcome = await client.DispatchAsync(prepared, credential, cancellationToken);
-        return await domain.RecordDispatchAsync(claim, outcome, clock.GetUtcNow(), cancellationToken);
+        TrackedDispatchResult result = observe
+            ? await ((IWorkspaceAgentRunClient)client).DispatchTrackedAsync(prepared, credential, cancellationToken)
+            : new(await client.DispatchAsync(prepared, credential, cancellationToken));
+        return await domain.RecordDispatchAsync(claim, result.Outcome, clock.GetUtcNow(), cancellationToken, result.RunId);
     }
 
     private void RequireAccess(CallerContext caller, bool start)

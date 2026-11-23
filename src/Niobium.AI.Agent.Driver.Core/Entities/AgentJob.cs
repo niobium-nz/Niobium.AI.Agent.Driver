@@ -7,7 +7,7 @@ using Niobium.AI.Agent.Driver.Core.Jobs;
 namespace Niobium.AI.Agent.Driver.Core.Entities;
 
 /// <summary>A conditional, scalar-only Table snapshot. Sensitive fields never belong in public results.</summary>
-public sealed record AgentJob
+public sealed partial record AgentJob
 {
     [EntityKey(EntityKeyKind.PartitionKey)]
     public string WorkspaceShard { get; set; } = "";
@@ -72,7 +72,8 @@ public sealed record AgentJob
         && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
 
     public AgentJobStatus Status() => new(JobId, TargetAgent, HandoffId,
-        (JobDispatchState)DispatchStateCode, (JobResultState)ResultStateCode, ResultSchema, CreatedUtc, ResultDeadlineUtc);
+        (JobDispatchState)DispatchStateCode, (JobResultState)ResultStateCode, ResultSchema, CreatedUtc, ResultDeadlineUtc,
+        JobFollowUp.ProviderName(ProviderStateCode), JobFollowUp.ContinuationName(ContinuationStateCode));
 
     public AgentJobResult Result() => new(JobId, (JobResultState)ResultStateCode, ResultSchema,
         OutcomeCode is int code ? (JobOutcome)code : null,
@@ -82,7 +83,7 @@ public sealed record AgentJob
 
     public void RequireValid()
     {
-        if (Version != 1 || !IsJobId(JobId) || !IdentifierRules.IsAlias(WorkspaceKey)
+        if (Version is not (1 or 2) || !IsJobId(JobId) || !IdentifierRules.IsAlias(WorkspaceKey)
             || WorkspaceShard != PartitionFor(WorkspaceKey, JobId) || !IsPrincipal(InitiatorPrincipalKey)
             || !IdentifierRules.IsAlias(TargetAgent) || !IdentifierRules.IsEventId(HandoffId)
             || !IdentifierRules.IsChannel(ApiChannelId) || !IdentifierRules.IsAlias(CredentialAlias)
@@ -90,14 +91,14 @@ public sealed record AgentJob
             || !IdentifierRules.IsAlias(SigningKeyVersion) || CapabilityNonce.Length != 32
             || RequestFingerprint.Length != 64 || CreatedUtc == default || ResultDeadlineUtc <= CreatedUtc
             || CapabilityExpiresUtc <= ResultDeadlineUtc || !Enum.IsDefined((JobDispatchState)DispatchStateCode)
-            || !Enum.IsDefined((JobResultState)ResultStateCode) || ProviderStateCode != 0 || ContinuationStateCode != 0
+            || !Enum.IsDefined((JobResultState)ResultStateCode)
             || (OutcomeCode is int outcome && !Enum.IsDefined((JobOutcome)outcome))
             || Attempts < 0 || ClaimGeneration < 0
             || (ResultStateCode != (int)JobResultState.Purged && RequestJson is null)
             || (ResultStateCode == (int)JobResultState.Available
                 && (ResultJson is null || ResultHash is null || OutcomeCode is null || ResultReceivedUtc is null)))
         { throw new JobException(JobError.JobUnavailable); }
-        // Conservative limits below Table's physical per-property and aggregate limits.
+        RequireFollowUpValid();
         JsonElement snapshot = JsonSerializer.SerializeToElement(this);
         foreach (JsonProperty property in snapshot.EnumerateObject())
         {

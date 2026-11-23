@@ -2,7 +2,7 @@ using Niobium.AI.Agent.Driver.Contracts;
 
 namespace Niobium.AI.Agent.Driver.Core;
 
-/// <summary>Stage 1 is dispatch-only. Tracked starts and access require separate explicit opt-ins.</summary>
+/// <summary>Stage 1 is dispatch-only. Tracked starts, access and optional follow-ups require separate opt-ins.</summary>
 public sealed class AgentGatewayOptions
 {
     public bool Enabled { get; set; }
@@ -18,6 +18,8 @@ public sealed class AgentGatewayOptions
     public bool EnableTrackedJobs { get; set; }
     public bool EnableTrackedJobAccess { get; set; }
     public bool EnableJobMaintenance { get; set; }
+    public bool EnableProviderRunPolling { get; set; }
+    public bool EnableParentContinuation { get; set; }
 
     public bool IsValid()
     {
@@ -28,7 +30,9 @@ public sealed class AgentGatewayOptions
             && MaxProviderBodyBytes is >= 1024 and <= 65536
             && MaxRegistryEntries is >= 1 and <= 1024
             && (!EnableTrackedJobs || EnableTrackedJobAccess)
-            && (!EnableJobMaintenance || EnableTrackedJobAccess);
+            && (!EnableJobMaintenance || EnableTrackedJobAccess)
+            && (!EnableProviderRunPolling || EnableTrackedJobAccess)
+            && (!EnableParentContinuation || EnableTrackedJobAccess);
         if (!limitsValid || !Enabled) { return limitsValid; }
         return IdentifierRules.IsAlias(InternalWorkspaceKey)
             && CredentialAliases.Count > 0

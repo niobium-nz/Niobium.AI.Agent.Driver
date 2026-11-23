@@ -37,7 +37,8 @@ public enum JobOutcome
 [JsonConverter(typeof(StrictJobEnumConverter<JobCompletionMode>))]
 public enum JobCompletionMode
 {
-    [JsonStringEnumMemberName("store_only")] StoreOnly = 0
+    [JsonStringEnumMemberName("store_only")] StoreOnly = 0,
+    [JsonStringEnumMemberName("notify_parent")] NotifyParent = 1
 }
 
 [JsonConverter(typeof(StrictJobEnumConverter<JobError>))]
@@ -66,6 +67,7 @@ public sealed record StartAgentJobRequest
     public string? ConversationKey { get; init; }
     public required string ResultSchema { get; init; }
     public required JobCompletionMode CompletionMode { get; init; }
+    public string? ContinuationRef { get; init; }
 }
 
 public sealed record SubmitJobResultRequest

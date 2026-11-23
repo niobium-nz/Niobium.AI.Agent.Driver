@@ -9,11 +9,12 @@ namespace Niobium.AI.Agent.Driver.Core.Flows;
 
 public sealed record JobMaintenanceReport(int Pages, int Rows, int Actions, int Failures, long DurationMs);
 
-/// <summary>Bounded, restart-safe store-only maintenance. It never redispatches an expired Sending/Unknown/Held job.</summary>
+/// <summary>Bounded maintenance. Expired/unknown sends are held, never treated as proof of non-delivery.</summary>
 public sealed class AgentJobMaintenanceFlow(
     IDomainRepository<AgentMaintenanceDomain, AgentMaintenance> cursors,
     IDomainRepository<AgentJobDomain, AgentJob> jobs, AgentJobFlow dispatch,
-    IOptions<AgentGatewayOptions> gateway, IOptions<TrackedJobOptions> settings, TimeProvider clock)
+    IOptions<AgentGatewayOptions> gateway, IOptions<TrackedJobOptions> settings, TimeProvider clock,
+    AgentJobFollowUpFlow? followUps = null)
 {
     public async Task<JobMaintenanceReport> ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -40,10 +41,8 @@ public sealed class AgentJobMaintenanceFlow(
                     try
                     {
                         snapshot.RequireValid();
-                        if (snapshot.WorkspaceKey != options.InternalWorkspaceKey)
-                        { throw new JobException(JobError.JobUnavailable); }
-                        AgentJobDomain domain = await jobs.GetAsync(snapshot.WorkspaceShard, snapshot.JobId,
-                            forceLoad: true, cancellationToken: budget.Token);
+                        if (snapshot.WorkspaceKey != options.InternalWorkspaceKey) { throw new JobException(JobError.JobUnavailable); }
+                        AgentJobDomain domain = await jobs.GetAsync(snapshot.WorkspaceShard, snapshot.JobId, forceLoad: true, cancellationToken: budget.Token);
                         AgentJob maintained = await domain.MaintainAsync(clock.GetUtcNow(), settings.Value.PayloadRetentionDays, budget.Token);
                         if (maintained != snapshot) { actions++; }
                         if (options.EnableTrackedJobs && maintained.DispatchStateCode == (int)JobDispatchState.Registered
@@ -51,10 +50,17 @@ public sealed class AgentJobMaintenanceFlow(
                         {
                             AgentJob sent = await dispatch.DispatchRegisteredAsync(maintained, budget.Token);
                             if (sent != maintained) { actions++; }
+                            maintained = sent;
+                        }
+                        if (options.EnableParentContinuation || options.EnableProviderRunPolling)
+                        {
+                            if (followUps is null) { throw new JobException(JobError.ConfigurationUnavailable); }
+                            AgentJob followed = await followUps.ExecuteAsync(maintained, budget.Token);
+                            if (followed != maintained) { actions++; }
                         }
                     }
                     catch (OperationCanceledException) when (budget.IsCancellationRequested) { throw; }
-                    catch (Exception) { failures++; } // Bad rows or revoked grants cannot starve later rows. Never log private exceptions.
+                    catch (Exception) { failures++; }
                 }
                 AgentMaintenance? checkpoint = await cursor.CheckpointAsync(claim, page.ContinuationToken, clock.GetUtcNow(), false, budget.Token);
                 if (checkpoint is null) { break; }
@@ -64,7 +70,6 @@ public sealed class AgentJobMaintenanceFlow(
         catch (OperationCanceledException) when (budget.IsCancellationRequested) { }
         finally
         {
-            // Cancellation leaves the bounded lease to expire; no detached cleanup or work after invocation.
             if (!budget.IsCancellationRequested)
             { _ = await cursor.CheckpointAsync(claim, claim.Cursor, clock.GetUtcNow(), true, budget.Token); }
         }

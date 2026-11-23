@@ -68,6 +68,14 @@ var dataSettings = [
     value: 'false'
   }
   {
+    name: 'AgentGatewayOptions__EnableProviderRunPolling'
+    value: 'false'
+  }
+  {
+    name: 'AgentGatewayOptions__EnableParentContinuation'
+    value: 'false'
+  }
+  {
     name: 'AzureWebJobs.MaintainAgentJobs.Disabled'
     value: 'true'
   }

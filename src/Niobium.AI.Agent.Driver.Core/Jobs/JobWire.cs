@@ -7,7 +7,7 @@ using Niobium.AI.Agent.Driver.Core.Entities;
 
 namespace Niobium.AI.Agent.Driver.Core.Jobs;
 
-/// <summary>Application-owned store-only contract. Model-supplied schemas and routing are never accepted.</summary>
+/// <summary>Application-owned contracts. Routing resolves from operator-provisioned references, never raw model input.</summary>
 public static class JobWire
 {
     public const string ResultSchemaId = "agent-result.v1";
@@ -25,8 +25,13 @@ public static class JobWire
 
     public static string CanonicalRequest(StartAgentJobRequest request, AgentGatewayOptions options)
     {
-        if (request.CompletionMode != JobCompletionMode.StoreOnly || request.ResultSchema != ResultSchemaId)
+        if (!Enum.IsDefined(request.CompletionMode) || request.ResultSchema != ResultSchemaId)
         { throw new JobException(JobError.UnsupportedResultSchema); }
+        if ((request.CompletionMode == JobCompletionMode.StoreOnly && request.ContinuationRef is not null)
+            || (request.CompletionMode == JobCompletionMode.NotifyParent && !IdentifierRules.IsAlias(request.ContinuationRef)))
+        { throw new JobException(JobError.InvalidRequest); }
+        if (request.CompletionMode == JobCompletionMode.NotifyParent && !options.EnableParentContinuation)
+        { throw new JobException(JobError.TrackedJobsDisabled); }
         _ = TriggerEnvelopeWriter.ValidateInput(new()
         {
             TargetAgent = request.TargetAgent, HandoffId = request.HandoffId,
