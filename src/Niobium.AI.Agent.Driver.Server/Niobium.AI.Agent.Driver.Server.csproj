@@ -21,6 +21,7 @@
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Mcp" Version="1.6.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Mcp.Sdk" Version="1.0.0-preview.4" />
     <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.22.0" />
+    <PackageReference Include="Niobium.Database.StorageTable" Version="4.2.66" />
     <PackageReference Include="Niobium.Platform.StorageTable" Version="4.2.70" />
     <PackageReference Include="Niobium.Platform.Functions" Version="4.2.70" />
     <ProjectReference Include="../Niobium.AI.Agent.Driver.Core/Niobium.AI.Agent.Driver.Core.csproj" />
