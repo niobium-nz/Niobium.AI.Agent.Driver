@@ -5,7 +5,6 @@ using Niobium.AI.Agent.Driver.Core;
 using Niobium.AI.Agent.Driver.Core.Dispatch;
 using Niobium.AI.Agent.Driver.Core.Domains;
 using Niobium.AI.Agent.Driver.Core.Entities;
-using Niobium.AI.Agent.Driver.Server;
 using Niobium.AI.Agent.Driver.Server.Security;
 using Niobium.AI.Agent.Driver.Server.Tools;
 using Niobium.Database.StorageTable;
@@ -18,7 +17,7 @@ public sealed class GatewayCompositionTests
     [TestMethod]
     public void ActualCompositionUsesTableRepositoriesAndOneNonRedirectingTransport()
     {
-        using IHost host = Program.CreateHost([]);
+        IHost host = IntegrationHostFixture.Host;
         using IServiceScope scope = host.Services.CreateScope();
         IServiceProvider services = scope.ServiceProvider;
         Assert.IsInstanceOfType<CloudTableRepository<AgentRegistration>>(services.GetRequiredService<IRepository<AgentRegistration>>());

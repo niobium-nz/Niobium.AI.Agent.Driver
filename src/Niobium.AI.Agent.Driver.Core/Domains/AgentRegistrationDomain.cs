@@ -10,9 +10,13 @@ public sealed class AgentRegistrationDomain(Lazy<IRepository<AgentRegistration>>
     public async Task<AgentRegistration?> GetDispatchableAsync(CallerContext caller,
         AgentGatewayOptions options, CancellationToken cancellationToken)
     {
-        AgentRegistration? entity = await TryGetEntityAsync(cancellationToken);
+        CheckInitialized();
+        // A deleted row must not fall back to an entity captured by GenericDomain.Initialize(entity).
+        // Authorization deliberately bypasses the domain snapshot, while staying inside this domain.
+        AgentRegistration? entity = await Repository.RetrieveAsync(PartitionKey, RowKey,
+            cancellationToken: cancellationToken);
         return entity is not null && entity.Enabled && entity.WorkspaceKey == caller.WorkspaceKey
-            && IsValid(entity, options) ? entity : null;
+            && entity.TargetAgent == RowKey && IsValid(entity, options) ? entity : null;
     }
 
     public static bool IsValid(AgentRegistration value, AgentGatewayOptions options) => value.Version == 1
@@ -31,30 +35,21 @@ public sealed class AgentRegistrationDomain(Lazy<IRepository<AgentRegistration>>
         AgentGatewayOptions options, CancellationToken cancellationToken = default)
     {
         if (!IsValid(value, options) || expectedETag == "*" || expectedETag == "")
-        {
-            throw new GatewayException(GatewayError.InvalidRequest);
-        }
+        { throw new GatewayException(GatewayError.InvalidRequest); }
         AgentRegistration? existing = await Repository.RetrieveAsync(value.WorkspaceKey, value.TargetAgent,
             cancellationToken: cancellationToken);
         if (existing?.ETag != expectedETag || (existing is not null && expectedETag is null))
-        {
-            throw new GatewayException(GatewayError.RegistryConflict);
-        }
+        { throw new GatewayException(GatewayError.RegistryConflict); }
         if (existing is not null && (existing.Version != 1 || existing.ApiChannelId != value.ApiChannelId
             || existing.CredentialAlias != value.CredentialAlias))
-        {
-            throw new GatewayException(GatewayError.RegistryConflict);
-        }
+        { throw new GatewayException(GatewayError.RegistryConflict); }
         AgentRegistration intended = value with { ETag = expectedETag, WriteId = Guid.NewGuid().ToString("N") };
-        IEnumerable<AgentRegistration> written = await SaveAsync([intended], cancellationToken: cancellationToken);
-        _ = written;
+        _ = await SaveAsync([intended], cancellationToken: cancellationToken);
         AgentRegistration? observed = await Repository.RetrieveAsync(value.WorkspaceKey, value.TargetAgent,
             cancellationToken: cancellationToken);
         if (observed is null || string.IsNullOrEmpty(observed.ETag)
             || (observed with { ETag = null }) != (intended with { ETag = null }))
-        {
-            throw new GatewayException(GatewayError.RegistryConflict);
-        }
+        { throw new GatewayException(GatewayError.RegistryConflict); }
         return observed;
     }
 }

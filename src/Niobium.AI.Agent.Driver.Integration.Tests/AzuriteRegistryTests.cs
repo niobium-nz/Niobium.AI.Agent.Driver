@@ -1,6 +1,6 @@
+using Azure;
 using Azure.Data.Tables;
 using Microsoft.Extensions.Logging.Abstractions;
-using Niobium.AI.Agent.Driver.Contracts;
 using Niobium.AI.Agent.Driver.Core;
 using Niobium.AI.Agent.Driver.Core.Domains;
 using Niobium.AI.Agent.Driver.Core.Entities;
@@ -48,9 +48,10 @@ public sealed class AzuriteRegistryTests
             Assert.AreNotEqual(created.ETag, updated.ETag);
             Assert.AreNotEqual(created.WriteId, updated.WriteId);
             await Assert.ThrowsExactlyAsync<GatewayException>(() => domain.ConfigureAsync(created, created.ETag, options, token));
-            // Exercise the adapter's actual service-side stale ETag behavior, not only our pre-read guard.
-            await Assert.ThrowsAsync<HttpRequestException>(async () =>
+            // Verify the actual pinned adapter's service-side 412, not only our pre-read guard.
+            RequestFailedException stale = await Assert.ThrowsAsync<RequestFailedException>(async () =>
                 _ = await registrations.UpdateAsync([created], cancellationToken: token));
+            Assert.AreEqual(412, stale.Status);
             Assert.IsNull(await registrations.RetrieveAsync("other-workspace", "research-v1", cancellationToken: token));
             List<AgentRegistration> rows = [];
             await foreach (AgentRegistration row in registrations.GetAsync("adapter-test", cancellationToken: token)) { rows.Add(row); }
@@ -73,7 +74,6 @@ public sealed class AzuriteRegistryTests
         }
         finally
         {
-            // Remove only the two random tables created by this test, never a shared table.
             using CancellationTokenSource cleanup = new(TimeSpan.FromSeconds(15));
             await service.DeleteTableAsync(registrationTable, cleanup.Token);
             await service.DeleteTableAsync(grantTable, cleanup.Token);

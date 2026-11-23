@@ -1,7 +1,9 @@
+using Microsoft.Extensions.Options;
 using Niobium.AI.Agent.Driver.Contracts;
 using Niobium.AI.Agent.Driver.Core;
 using Niobium.AI.Agent.Driver.Core.Domains;
 using Niobium.AI.Agent.Driver.Core.Entities;
+using Niobium.AI.Agent.Driver.Core.Flows;
 
 namespace Niobium.AI.Agent.Driver.Server.Tests;
 
@@ -27,6 +29,28 @@ public sealed class DomainAndFlowTests
         Assert.AreEqual(1, fixture.Registrations.Writes);
         Assert.AreEqual(2, fixture.Grants.Writes);
         Assert.AreEqual(0, (await fixture.ListFlow().ExecuteAsync(fixture.Caller, default)).Agents.Count);
+    }
+
+    [TestMethod]
+    public async Task DeletedRowsCannotBeRevivedByPartitionCachedDomainSnapshots()
+    {
+        foreach (bool deleteGrant in new[] { true, false })
+        {
+            GatewayFixture fixture = new();
+            await fixture.SeedAsync();
+            var registrations = fixture.RegistrationDomains();
+            var grants = fixture.GrantDomains();
+            ListAgentsFlow listing = new(registrations, grants, Options.Create(fixture.Options), TimeProvider.System);
+            Assert.AreEqual(1, (await listing.ExecuteAsync(fixture.Caller, default)).Agents.Count);
+            // Materialize both partitions, then exercise forced single-key lookups on the same repositories.
+            await foreach (var unused in registrations.GetAsync(fixture.Caller.WorkspaceKey)) { _ = unused; }
+            if (deleteGrant) { await fixture.Grants.DeleteAsync([fixture.Grant]); }
+            else { await fixture.Registrations.DeleteAsync([fixture.Registration]); }
+            DispatchAgentFlow dispatch = new(registrations, grants, fixture.Provider, Options.Create(fixture.Options), TimeProvider.System);
+            GatewayException error = await Assert.ThrowsExactlyAsync<GatewayException>(() => dispatch.ExecuteAsync(fixture.Request, fixture.Caller, default));
+            Assert.AreEqual(deleteGrant ? GatewayError.Forbidden : GatewayError.TargetUnavailable, error.Code);
+            Assert.AreEqual(0, fixture.Provider.Calls.Count);
+        }
     }
 
     [TestMethod]
@@ -79,23 +103,21 @@ public sealed class DomainAndFlowTests
     public async Task GrantExpiryVersionAndPermissionFailClosed()
     {
         GatewayFixture fixture = new();
-        foreach (AgentGrant value in new[]
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        foreach (AgentGrant? value in new AgentGrant?[]
         {
-            fixture.Grant with { ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(-1) },
+            null, fixture.Grant with { ExpiresUtc = now }, fixture.Grant with { ExpiresUtc = now.AddMinutes(-1) },
             fixture.Grant with { Version = 99 }, fixture.Grant with { CanDispatch = false },
-            fixture.Grant with { CallerPartition = "wrong" }, fixture.Grant with { TargetAgent = "/bad" }
-        })
-        {
-            AgentGrantDomain domain = fixture.GrantDomain();
-            domain.Initialize(value);
-            Assert.IsFalse(await domain.PermitsDispatchAsync(fixture.Caller, DateTimeOffset.UtcNow, default));
-        }
+            fixture.Grant with { Enabled = false }, fixture.Grant with { CallerPartition = "wrong" },
+            fixture.Grant with { TargetAgent = "/bad" }
+        }) { Assert.IsFalse(AgentGrantDomain.IsPermitted(value, fixture.Caller, now)); }
+        await fixture.Grants.CreateAsync([fixture.Grant with { ExpiresUtc = now.AddHours(1) }]);
         AgentGrantDomain valid = fixture.GrantDomain();
-        valid.Initialize(fixture.Grant with { ExpiresUtc = DateTimeOffset.UtcNow.AddHours(1) });
-        Assert.IsTrue(await valid.PermitsDispatchAsync(fixture.Caller, DateTimeOffset.UtcNow, default));
+        valid.Initialize(fixture.Grant.CallerPartition, fixture.Grant.TargetAgent);
+        Assert.IsTrue(await valid.PermitsDispatchAsync(fixture.Caller, now, default));
         AgentGrantDomain missing = fixture.GrantDomain();
         missing.Initialize("missing", "missing");
-        Assert.IsFalse(await missing.PermitsDispatchAsync(fixture.Caller, DateTimeOffset.UtcNow, default));
+        Assert.IsFalse(await missing.PermitsDispatchAsync(fixture.Caller, now, default));
     }
 
     [TestMethod]
