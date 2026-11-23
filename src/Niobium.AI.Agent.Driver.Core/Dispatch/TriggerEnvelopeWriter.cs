@@ -63,8 +63,9 @@ public static class TriggerEnvelopeWriter
             writer.WriteRawValue(input);
             writer.WriteEndObject();
         }
+        // Different immutable aliases may share a channel but carry different envelope targets.
         string key = StableIdentity.Derive("niobium-agent-dispatch-v1", caller.WorkspaceKey,
-            caller.PrincipalKey, registration.ApiChannelId, request.HandoffId);
+            caller.PrincipalKey, request.TargetAgent, registration.ApiChannelId, request.HandoffId);
         using MemoryStream body = new();
         using (Utf8JsonWriter writer = new(body))
         {

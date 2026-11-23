@@ -67,7 +67,7 @@ public sealed class McpCallerContextAdapter(IOptions<GatewayAuthenticationOption
             string? subject = Single(principal, "oid");
             string? client = Single(principal, "azp");
             string? scope = Single(principal, "scp");
-            if (!string.Equals(tenant, options.TenantId, StringComparison.OrdinalIgnoreCase)
+            if (!string.Equals(tenant, options.CanonicalTenantId, StringComparison.OrdinalIgnoreCase)
                 || !Guid.TryParseExact(subject, "D", out Guid objectId)
                 || client is null || !options.AllowedClientIds.Contains(client, StringComparer.OrdinalIgnoreCase)
                 || scope is null || !scope.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains(options.RequiredScope, StringComparer.Ordinal))
@@ -75,7 +75,7 @@ public sealed class McpCallerContextAdapter(IOptions<GatewayAuthenticationOption
                 throw new GatewayException(GatewayError.Forbidden);
             }
             return CallerContext.FromValidatedClaims(gateway.Value.InternalWorkspaceKey, options.Issuer,
-                options.TenantId.ToLowerInvariant(), "oid:" + objectId.ToString("D"), client.ToLowerInvariant(), true);
+                options.CanonicalTenantId, "oid:" + objectId.ToString("D"), client.ToLowerInvariant(), true);
         }
         catch (SecurityTokenSignatureKeyNotFoundException)
         {

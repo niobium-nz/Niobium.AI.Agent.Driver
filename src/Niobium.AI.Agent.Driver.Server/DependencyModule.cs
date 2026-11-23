@@ -27,7 +27,7 @@ public static class DependencyModule
         builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(provider =>
         {
             GatewayAuthenticationOptions options = provider.GetRequiredService<IOptions<GatewayAuthenticationOptions>>().Value;
-            string tenant = options.IsValid() ? options.TenantId : Guid.Empty.ToString("D");
+            string tenant = options.IsValid() ? options.CanonicalTenantId : Guid.Empty.ToString("D");
             return new ConfigurationManager<OpenIdConnectConfiguration>(
                 "https://login.microsoftonline.com/" + tenant + "/v2.0/.well-known/openid-configuration",
                 new OpenIdConnectConfigurationRetriever(), new HttpDocumentRetriever { RequireHttps = true });

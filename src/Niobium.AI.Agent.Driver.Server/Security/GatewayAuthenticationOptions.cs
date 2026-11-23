@@ -7,7 +7,8 @@ public sealed class GatewayAuthenticationOptions
     public string Audience { get; set; } = "";
     public string RequiredScope { get; set; } = "AgentGateway.Dispatch";
     public string[] AllowedClientIds { get; set; } = [];
-    public string Issuer => "https://login.microsoftonline.com/" + TenantId + "/v2.0";
+    public string CanonicalTenantId => Guid.TryParseExact(TenantId, "D", out Guid tenant) ? tenant.ToString("D") : "";
+    public string Issuer => "https://login.microsoftonline.com/" + CanonicalTenantId + "/v2.0";
 
     public bool IsValid() => Guid.TryParseExact(TenantId, "D", out _)
         && !string.IsNullOrWhiteSpace(Audience) && !Audience.Any(char.IsWhiteSpace)

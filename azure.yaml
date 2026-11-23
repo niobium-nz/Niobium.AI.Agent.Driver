@@ -24,9 +24,7 @@ services:
     host: function
     hooks:
       prepackage:
-        # Packaging runs on a separate runner from verification. Keep every solution test,
-        # and provide its isolated emulator here rather than depending on another job.
-        run: npm exec --yes --package=azurite@3.35.0 -- bash ../../scripts/test-packaging.sh
+        run: dotnet test --solution ../../Niobium.AI.Agent.Driver.slnx --configuration Release
 
 pipeline:
   provider: github

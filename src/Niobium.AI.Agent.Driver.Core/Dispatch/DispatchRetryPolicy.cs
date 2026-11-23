@@ -17,6 +17,10 @@ public static class DispatchRetryPolicy
         _ => new(false, true, false, GatewayError.UpstreamOutcomeUnknown)
     };
 
+    /// <summary>A retry cancelled before its send cannot change the last observed provider outcome.</summary>
+    public static AttemptOutcome OnCancellation(AttemptOutcome previous, bool attemptStarted) =>
+        attemptStarted ? new(false, true, true, GatewayError.UpstreamOutcomeUnknown) : previous;
+
     public static DispatchAgentResult Result(PreparedDispatch request, AttemptOutcome outcome, bool earlierUncertainty)
     {
         if (outcome.Accepted)

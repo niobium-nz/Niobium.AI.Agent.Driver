@@ -46,6 +46,7 @@ public sealed class WorkspaceAgentClient(HttpClient http, IOptions<AgentGatewayO
             {
                 break;
             }
+            bool attemptStarted = false;
             TimeSpan? retryAfter = null;
             using HttpRequestMessage message = new(HttpMethod.Post,
                 new Uri("https://api.chatgpt.com/v1/workspace_agents/" + request.ApiChannelId + "/trigger"));
@@ -58,6 +59,7 @@ public sealed class WorkspaceAgentClient(HttpClient http, IOptions<AgentGatewayO
             try
             {
                 attemptDeadline.Token.ThrowIfCancellationRequested();
+                attemptStarted = true;
                 sent = true;
                 attempts++;
                 using HttpResponseMessage response = await http.SendAsync(message,
@@ -76,16 +78,17 @@ public sealed class WorkspaceAgentClient(HttpClient http, IOptions<AgentGatewayO
             }
             catch (OperationCanceledException)
             {
-                outcome = new(false, sent, true, GatewayError.UpstreamOutcomeUnknown);
+                outcome = DispatchRetryPolicy.OnCancellation(outcome, attemptStarted);
             }
             catch (HttpRequestException)
             {
-                outcome = new(false, true, true, GatewayError.UpstreamOutcomeUnknown);
+                outcome = new(false, attemptStarted, true, GatewayError.UpstreamOutcomeUnknown);
             }
             catch (Exception)
             {
-                // Do not let an unexpected post-send error become a false not_dispatched result.
-                outcome = new(false, sent, false, GatewayError.UpstreamOutcomeUnknown);
+                // An earlier definitive response does not make an unstarted retry uncertain.
+                if (!attemptStarted) { break; }
+                outcome = new(false, true, false, GatewayError.UpstreamOutcomeUnknown);
             }
             uncertain |= outcome.Uncertain;
             if (!outcome.Retryable || attempt == options.MaxDispatchAttempts || budget.IsCancellationRequested)

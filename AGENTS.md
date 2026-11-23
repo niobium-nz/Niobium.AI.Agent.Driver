@@ -1,6 +1,8 @@
 # Working in Niobium.AI.Agent.Driver
 
-Check the working directory, branch, commit and `git status --short` before editing. Preserve unrelated changes. Use the Driver repository for implementation and the version of the Niobium framework resolved by the project's NuGet references for framework behavior. Submit changes to `main` through a feature branch and reviewed PR.
+Check the working directory, branch, commit and `git status --short` before editing. Preserve unrelated changes. Use the Driver repository for implementation and the version of the Niobium framework resolved by the project's NuGet references for framework behavior. Work on a branch named `feature/<description>` and submit changes to `main` through a reviewed PR. Do not create implementation branches under `codex/` or push changes directly to `main`.
+
+Every `feature/` branch push must run the test deployment pipeline. The existing `push.branches-ignore: [main]` trigger includes all feature names, including nested names and documentation-only changes. Keep the trusted delivery definition intact for application changes. Local emulator and native host dependencies belong to the integration-test fixture so ordinary `dotnet test`, CI and packaging run the same checks. See [feature branch delivery](docs/feature-branch-delivery.md).
 
 ## Implementation
 
@@ -20,10 +22,11 @@ vaults. Functions deployment packages use `<prefix>sts<env>` and application
 data uses `<prefix>std<env>`. Driver binds its `AzureWebJobsStorage` Blob, Queue
 and Table endpoints to the `sts` account.
 Driver uses the service slug `agents` and compact prefix `niobiumagents`.
-[Azure naming guide](https://github.com/niobium-nz/Niobium.DevOps/blob/f437f5a77dbec45296c0586b5bbe828d36eeb38b/docs/azure-resource-naming.md) · [Current DevOps documentation](https://github.com/niobium-nz/Niobium.DevOps/tree/main/docs)
+[Azure naming guide](https://github.com/niobium-nz/Niobium.DevOps/blob/f437f5a77dbec45296c0586b5bbe828d36eeb38b/docs/azure-resource-naming.md) - [Current DevOps documentation](https://github.com/niobium-nz/Niobium.DevOps/tree/main/docs)
 
-Driver uses West US 2 and Azure's default Functions hostname. The separate
-application data account starts empty. [Test and production names](README.md#azure-naming-and-resources)
+Driver uses West US 2 and Azure's default Functions hostname. Stage 1 uses
+only AgentRegistration and AgentGrant configuration tables in the separate data account.
+[Test and production names](README.md#azure-naming-and-resources)
 
 Keep host resources and runtime settings in `infra/function-app.bicep`. Put service-owned resources in `infra/main.bicep` and pass derived settings through `appSettings`. Configure each environment through the same modules. Explicitly project GitHub environment inputs into the runner. Ordinary `APPSETTING_` values become Bicep settings. For `APPSETTING_KV_` variables, only names enter the parameters. The postprovision hook writes the values to Key Vault and refreshes the app's references after successful writes. Keep credentials and local Azure state outside source control.
 

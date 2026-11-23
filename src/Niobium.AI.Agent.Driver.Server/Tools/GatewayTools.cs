@@ -24,7 +24,7 @@ public sealed class GatewayTools(ICallerContextAccessor callers, ListAgentsFlow 
             return ToolResult(result, false);
         }
         catch (GatewayException error) { return Error(error.Code); }
-        catch (OperationCanceledException) { return Error(GatewayError.DeadlineExceeded); }
+        catch (OperationCanceledException) { return Error(GatewayError.DeadlineExceeded, RetryAdvice.RetrySameEventOnly); }
         catch (Exception) { return Error(GatewayError.ConfigurationUnavailable); }
     }
 
@@ -55,6 +55,11 @@ public sealed class GatewayTools(ICallerContextAccessor callers, ListAgentsFlow 
                 DispatchState.NotDispatched, ErrorCode: error.Code, RetryAdvice: RetryAdvice.OperatorActionRequired), true);
         }
         catch (JsonException) { return Error(GatewayError.InvalidRequest); }
+        catch (OperationCanceledException) when (!flowStarted)
+        {
+            // A metadata/authentication timeout happened before any dispatch flow could send.
+            return Error(GatewayError.DeadlineExceeded, RetryAdvice.RetrySameEventOnly);
+        }
         catch (Exception)
         {
             if (request is not null && flowStarted)
@@ -81,6 +86,6 @@ public sealed class GatewayTools(ICallerContextAccessor callers, ListAgentsFlow 
         Content = [new TextContentBlock { Text = JsonSerializer.Serialize(value, GatewayJson.Options) }]
     };
 
-    private static CallToolResult Error(GatewayError error) => ToolResult(
-        new GatewayToolError(error, RetryAdvice.OperatorActionRequired), true);
+    private static CallToolResult Error(GatewayError error, RetryAdvice advice = RetryAdvice.OperatorActionRequired) =>
+        ToolResult(new GatewayToolError(error, advice), true);
 }
