@@ -1,0 +1,18 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "AgentGatewayOptions__Enabled": "false",
+    "AgentGatewayOptions__InternalWorkspaceKey": "example-workspace",
+    "AgentGatewayOptions__DispatchTimeoutSeconds": "25",
+    "AgentGatewayOptions__AttemptTimeoutSeconds": "8",
+    "AgentGatewayOptions__MaxDispatchAttempts": "3",
+    "AgentGatewayOptions__MaxInputBytes": "16384",
+    "AgentGatewayOptions__MaxProviderBodyBytes": "65536",
+    "AgentGatewayOptions__AllowConversationReuse": "false",
+    "GatewayAuthenticationOptions__TenantId": "",
+    "GatewayAuthenticationOptions__Audience": "",
+    "GatewayAuthenticationOptions__RequiredScope": "AgentGateway.Dispatch"
+  }
+}

@@ -16,7 +16,7 @@ public sealed class FunctionHostTests
     [TestMethod]
     public async Task ConfiguredHostWritesTheHealthResponseAsJson()
     {
-        using IHost host = Program.CreateHost([]);
+        IHost host = IntegrationHostFixture.Host;
         using IServiceScope scope = host.Services.CreateScope();
         scope.ServiceProvider.GetRequiredService<ICacheStore>();
         DefaultHttpContext http = new() { RequestServices = scope.ServiceProvider };
