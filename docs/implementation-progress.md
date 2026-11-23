@@ -1,38 +1,35 @@
-# Agent Gateway implementation progress
+# Implementation progress
 
-## Baseline and scope
+## Baselines and delivery
 
-Stage 1 source was merged in PR #5 as `a2b701b9e98f500092a27ac2ac8acaef2ce4ca44`. Its tested feature head was `40c8a5f8867459f2ecd7e988f2782ab0b019653f`. The follow-on implementation is PR #6 on `feature/agent-job-results`. It adds the disabled store-only Stage 2 path without treating the merge of Stage 1 as proof of live OAuth or upstream acceptance.
+Stage 1 PR #5 was merged to `main` as `a2b701b9e98f500092a27ac2ac8acaef2ce4ca44`. Its merge-triggered production deployment and read-only checks passed. No live dispatch activation was implied.
 
-| Original work package / gate | Current state |
-| --- | --- |
-| Stage 1 source, native MCP, current authorization, bounded provider dispatch | Merged; legacy dispatch remains persistence-free. |
-| Stage 1 live OAuth and A-to-B acceptance | Still required. No live provider credentials or API channel were supplied or invented in this implementation session. |
-| S2.1 tracked registration and dispatch | Implemented source: explicit grants, keyed identity, immutable fingerprint, conditional create/claim, conservative ambiguous outcomes. |
-| S2.2 result exchange | Implemented source: application-owned result schema, OAuth plus scoped JWT capability, immutable duplicate-safe result, owner-only reads. |
-| S2.3 required maintenance | Implemented source: bounded checkpointed shard scan, cursor lease, never-attempted recovery, expired-send holds, deadlines and physical retention cleanup. |
-| S2.3 optional provider polling | Not implemented. Provider state stays unobserved. No guessed status API is called. |
-| S2.4 optional parent continuation | Not implemented. Store-only is the sole supported completion mode. No route entity or notification send is exposed. |
-| S2.5 activation and production acceptance | Runbooks and disabled staging parameters authored; real OAuth, privacy, approved credentials/resources and end-to-end trials remain gated. |
+Stage 2 is being delivered in PR #6 on `feature/agent-job-results`. The store-only baseline `d24e8a002b81a8bfca2efdb0a0ef5127c343623a` passed 109 unit tests, 8 local integration tests, 95.17% combined coverage, packaging, exact-commit test deployment and independent health verification in Actions run 45154757229. This historical evidence does not certify later commits.
 
-## New source and safety boundaries
+The follow-up commit `93a24949053cd5ec447c20b678bf2dca333a1f46` adds optional provider observation and parent notification. Its build, unit/integration tests and unchanged coverage gate passed in run 45162456012 while the next activation-probe/CORS changes were being prepared. The final PR description records the terminal exact-head results; no local .NET execution in the authoring container is claimed.
 
-Four additive MCP tools: `start_agent_job`, `submit_job_result`, `get_job_status`, `get_job_result`. `AgentJobDomain` owns conditional state changes and immutable result rules; `AgentJobFlow` coordinates current grants and the existing bounded provider client. `AgentMaintenanceDomain` owns sweep leases/checkpoints and `AgentJobMaintenanceFlow` performs bounded work. Server functions remain transport adapters.
+## Original plan coverage
 
-Only version-2 registrations and explicit version-2 grants permit tracked work. Version-1 rows preserve Stage 1 behavior without gaining job permissions. Identity and signing keys are dedicated, allowlisted and resolved from configuration. Raw completion capabilities never enter stored snapshots or initiator responses. A valid callback can precede the dispatch acknowledgment save. Unknown/Held dispatches are never automatically resent or purged by the timer.
+| Work package | Source status | Acceptance boundary |
+| --- | --- | --- |
+| S1.1 compatibility/authentication | Native MCP, validated Entra caller adapter, mandatory-auth template and read-only acceptance probe implemented | Actual ChatGPT OAuth discovery/client/redirect/refresh and all deployed ingress checks remain outstanding |
+| S1.2-S1.4 core dispatch | Registry/grants, deterministic HTTP policy, native tools and setup instructions implemented | Harmless live A-to-B trial requires approved agents, credentials and explicit execution authorization |
+| S1.5 infrastructure/operations | Existing trusted pipeline retained, defaults disabled, restrictive CORS default, operating guides and independent health evidence | Applying mandatory OAuth requires a reviewed authenticated-harness transition and real telemetry privacy evidence |
+| S2.1-S2.2 tracked result exchange | Durable identity, conditional state, completion capabilities, duplicate-safe results, owner reads implemented | Live A-to-B-to-result trial and issued-job rollback verification remain environment-specific |
+| S2.3 maintenance and optional polling | Bounded persisted sweeps, leases, deadlines, retention and opt-in run-status observer implemented | Beta API compatibility must be demonstrated with an approved test run; missing IDs do not trigger redispatch |
+| S2.4 optional parent continuation | Operator routes, atomic same-row result/outbox, deterministic notification and fenced claims implemented | Actual API-conversation routing trial remains required; arbitrary ChatGPT UI-thread resume is not supported |
+| S2.5 failure tests/rollout | Added concurrency, recovery, rollback, authorization, HTTP and real Table tests | Independent approval plus final live acceptance are not replaced by unit tests or disabled deployments |
 
-Default deployments create only the existing two registry tables and disable all execution flags, including the new timer. The separate tracked-job parameter file stages additional tables only when explicitly selected. No production activation, live agent trigger, provider polling, continuation or package publication is part of PR #6.
+## Additional source improvements
 
-## Verification record
+A review finding in the store-only baseline exposed the case where short retention could purge a result while its callback capability remained valid. Cleanup now waits for capability expiry as well as terminal disposition and retention. A duplicate during that period receives its original receipt. Pending or uncertain parent notifications also prevent automatic payload purge.
 
-Historical Stage 1 feature run [45147173401](https://github.com/niobium-nz/Niobium.AI.Agent.Driver/actions/runs/45147173401) passed 73 unit tests, 5 integration tests, test deployment and the trusted main harness, with 93.56% combined coverage. Those results do not certify the Stage 2 changes.
+`AgentJob` version 2 adds optional observation and continuation fields without changing the version-1 store-only contract. No automatic backfill is needed. New follow-up flags default off; ordinary IaC also pins them off. The parent route table is only in explicit storage-staging parameters. No model-facing arbitrary URL, channel, token or conversation-binding operation was added.
 
-The initial Stage 2 commit `c4231c2af555d9114bc2c9f47261e5c41c16902d` built and passed its unit/local integration tests in run [45153340794](https://github.com/niobium-nz/Niobium.AI.Agent.Driver/actions/runs/45153340794), but failed the unchanged coverage gate. Additional capability, maintenance, tool-boundary and real-adapter concurrency/purge tests were added. One subsequent compile finding in the new test fixture (TableEntity enumeration) was corrected rather than bypassed.
+See [job follow-ups](job-follow-ups.md) for optional contract/state/rollback details and [protected gateway acceptance](protected-gateway-acceptance.md) for the read-only operator probe. The new probe does not modify the trusted readiness controller or fabricate any success status. Missing live token prerequisites are reported as skipped and cause failure.
 
-Consult [PR #6](https://github.com/niobium-nz/Niobium.AI.Agent.Driver/pull/6) and its exact final-head run for current terminal test/coverage/deployment results. Keep failed, skipped, old-head and authored-only checks separate from evidence. The trusted pipeline files and 90% combined / 80% per-module thresholds are unchanged. The authoring container has no .NET SDK; .NET and Azure results must come from actual GitHub Actions execution, not a claimed local build.
+## Still not performed or claimed
 
-## Activation and deferred work
+No production activation, agent publication, workspace permission change, live billable agent trigger, live result submission, live continuation binding, new application queue or package publication was performed. Real tenant/client configuration and approved credentials are not values to invent in source. Telemetry must be inspected on the actual deployed platform. Keep callbacks/readers on the updated binary when rolling back version-2 starts; disabling flags is not equivalent to deploying an older binary that cannot read version 2.
 
-Before enabling either dispatch path: establish actual ChatGPT OAuth discovery/redirect/refresh and delegated identity compatibility; prove mandatory authentication on all reachable paths; restrict CORS; authenticate health probes; verify platform telemetry excludes bodies/capabilities/bearers; authorize a harmless nonproduction end-to-end trial and independently observe receipt. Before tracked activation, also stage approved tables, dedicated stable identity/signing keys, version-2 registrations/grants and callback instructions.
-
-Optional provider polling and parent continuation need their own reviewed implementation and acceptance. Additional result-reader policies, a large-scale indexed scheduler, operator resolution of Held jobs, and identity-key migration are not claimed implemented. See [tracked jobs](tracked-jobs.md), [compatibility evidence](compatibility-evidence.md), and the original handover for the remaining work.
+Additional result-reader policies, automatic operator resolution of ambiguous jobs, identity-key migration and high-scale indexed scheduling remain separately reviewable operational extensions, not prerequisites for this bounded initial implementation.
