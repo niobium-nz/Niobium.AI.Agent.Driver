@@ -1,14 +1,14 @@
 # Niobium.AI.Agent.Driver
 
-Driver is a .NET 10 isolated Azure Functions v4 app with native Streamable HTTP MCP at `/runtime/webhooks/mcp`. Stage 1 `list_agents` and `dispatch_agent` provide permitted-agent discovery and bounded submission acknowledgment without storing handoffs. The separately gated [store-only tracked-job extension](docs/tracked-jobs.md) adds `start_agent_job`, `submit_job_result`, `get_job_status` and `get_job_result`, durable conditional job state and optional bounded maintenance. There is no automatic parent continuation or provider polling.
+Driver is a .NET 10 isolated Azure Functions v4 app with native Streamable HTTP MCP at `/runtime/webhooks/mcp`. Stage 1 `list_agents` and `dispatch_agent` provide permitted-agent discovery and bounded submission acknowledgment without storing handoffs. The separately gated [tracked-job extension](docs/tracked-jobs.md) adds `start_agent_job`, `submit_job_result`, `get_job_status` and `get_job_result`, durable conditional job state and bounded maintenance. Store-only result exchange is the default tracked mode; [provider observation and allowlisted parent continuation](docs/job-follow-ups.md) are separate opt-ins.
 
-**Dispatch, tracked jobs and maintenance are disabled by default.** Code deployment is not authorization to activate billable agent execution. Complete real OAuth, ingress, privacy and nonproduction acceptance gates before activation. The [original handover](docs/niobium-agent-gateway-handover/Niobium.AgentGateway.Implementation-Plan.md) defines the larger plan; [implementation progress](docs/implementation-progress.md) distinguishes implemented code from remaining acceptance and optional work.
+**Dispatch, tracked jobs, maintenance, provider polling and parent continuation are disabled by default.** Code deployment is not authorization to activate billable agent execution. Complete real OAuth, ingress, privacy and nonproduction acceptance gates before activation. The [original handover](docs/niobium-agent-gateway-handover/Niobium.AgentGateway.Implementation-Plan.md) defines the larger plan; [implementation progress](docs/implementation-progress.md) distinguishes implemented code from remaining live acceptance.
 
 The scaffold deployment check is `GET /health`. A ready instance returns HTTP 200, `status` equal to `ready`, and the embedded Git commit. This is not evidence that MCP authentication or upstream execution works. The original environment setup comes from [Niobium.Invoicing at 0b4ffa7](https://github.com/niobium-nz/Niobium.Invoicing/tree/0b4ffa7a7c6d255e7d3f0db7553cc87a807959a9).
 
 ## Development and operating guides
 
-Read [architecture](docs/architecture.md), [configuration](docs/configuration-and-development.md), [security](docs/security.md), [ChatGPT setup](docs/chatgpt-agent-setup.md), [delivery and operations](docs/delivery-and-operations.md) and [tracked jobs](docs/tracked-jobs.md). [Compatibility evidence](docs/compatibility-evidence.md) records what has actually been tested. Follow [AGENTS.md](AGENTS.md), use `feature/<description>` branches, and retain the [independent review and approval procedure](docs/pr-approval-handoff.md). Every feature push triggers the trusted test-deployment workflow, including documentation changes.
+Read [architecture](docs/architecture.md), [configuration](docs/configuration-and-development.md), [security](docs/security.md), [ChatGPT setup](docs/chatgpt-agent-setup.md), [delivery and operations](docs/delivery-and-operations.md), [tracked jobs](docs/tracked-jobs.md), [optional follow-ups](docs/job-follow-ups.md) and [protected gateway acceptance](docs/protected-gateway-acceptance.md). [Compatibility evidence](docs/compatibility-evidence.md) records historical test observations; the PR records final exact-head results. Follow [AGENTS.md](AGENTS.md), use `feature/<description>` branches, and retain the [independent review and approval procedure](docs/pr-approval-handoff.md). Every feature push triggers the trusted test-deployment workflow, including documentation changes.
 
 ## Local development
 
@@ -50,7 +50,7 @@ Driver uses resource group slug `agents`, compact prefix `niobiumagents`, **West
 | Log Analytics | `niobiumagents-log-test` | `niobiumagents-log-prod` |
 | Key Vault | `niobiumagents-kv-test` | `niobiumagents-kv-prod` |
 
-Storage names concatenate prefix, `st`, purpose (`s` for deployment/host, `d` for application data) and environment. Other resources use `{prefix}-{abbreviation}-{environment}`. The ordinary parameter file provisions only `AgentRegistration` and `AgentGrant`. `infra/tracked-jobs.bicepparam` explicitly stages `AgentJob` and `AgentMaintenance` storage while leaving execution disabled. No Service Bus, continuation-route table or custom domain is provisioned.
+Storage names concatenate prefix, `st`, purpose (`s` for deployment/host, `d` for application data) and environment. Other resources use `{prefix}-{abbreviation}-{environment}`. The ordinary parameter file provisions only `AgentRegistration` and `AgentGrant`. `infra/tracked-jobs.bicepparam` explicitly stages `AgentJob` and `AgentMaintenance`; `infra/parent-continuation.bicepparam` additionally stages `AgentContinuationRoute`. Both are operator opt-ins and leave execution disabled. No Service Bus or custom domain is provisioned by default.
 
 ## GitHub and Azure configuration
 
@@ -60,7 +60,7 @@ Give each deployment identity permission to manage declared resources and role a
 
 Azure Developer CLI (`azd`) packages the Server, provisions Bicep and deploys Linux Flex Consumption. Managed identity connects storage, telemetry and Key Vault. The Niobium Table adapter receives the separate data endpoint through `StorageTableOptions__FullyQualifiedDomainName`. The existing APPSETTING_/APPSETTING_KV_ projection scripts remain the configuration path; keep local azd state and secrets out of source control.
 
-`infra/gateway-auth.bicep` configures mandatory App Service OAuth without enabling dispatch or making MCP anonymous. Adopt it only through reviewed activation that also authenticates health probes, restricts scaffold CORS and proves the actual ChatGPT OAuth flow.
+`infra/gateway-auth.bicep` configures mandatory App Service OAuth without enabling dispatch or making MCP anonymous. Adopt it only through reviewed activation that also authenticates health probes and proves the actual ChatGPT OAuth flow. The reusable Function template now denies browser origins by default and disables credentialed CORS. Use the explicitly invoked read-only [authentication probe](docs/protected-gateway-acceptance.md) after supplying approved test credentials; it cannot dispatch an agent, mutate configuration or claim interactive ChatGPT consent/refresh evidence.
 
 ## Actions and activation
 
@@ -68,4 +68,4 @@ Azure Deployment builds/tests feature pushes, compiles infrastructure and enforc
 
 Package publication separately requires `PUBLISH_CONTRACTS=true` and a reviewed packaging change. Contracts/Core remain non-packable project references. Configure `NUGET_USER` and trusted publishing only as part of that decision.
 
-Ordinary infrastructure restores the gateway, tracked feature flags and timer to their disabled states. A reviewed activation change must make any authorized enablement durable. For active tracked jobs, rollback should stop new starts while retaining completion/retrieval and necessary signing keys; see [the rollback runbook](docs/tracked-jobs.md#configuration-rollout-and-rollback). A submission acknowledgment must never be represented as task completion.
+Ordinary infrastructure restores all gateway, tracked-job and optional follow-up flags plus the timer to their disabled states. A reviewed activation change must make any authorized enablement durable. For active tracked jobs, rollback should stop new starts while retaining completion/retrieval, the compatible reader binary and necessary signing keys; see [configuration and rollback](docs/tracked-jobs.md#configuration-and-rollback). A submission acknowledgment must never be represented as task completion, and a provider run state must never substitute for the stored business result.
