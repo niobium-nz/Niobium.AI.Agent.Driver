@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.niobium.invalid/agent-gateway/get-job.request.schema.json",
+  "title": "Stage 2 get_job_status/get_job_result input",
+  "$comment": "Proposed gateway contract only. The .invalid schema hostname is an identifier, not a deployed service. Application authorization and byte limits are additional requirements.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "job_id": {
+      "$ref": "common.schema.json#/$defs/job_id"
+    }
+  },
+  "required": [
+    "job_id"
+  ]
+}

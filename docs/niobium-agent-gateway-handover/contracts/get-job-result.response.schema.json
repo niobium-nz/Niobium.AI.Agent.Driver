@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.niobium.invalid/agent-gateway/get-job-result.response.schema.json",
+  "title": "Stage 2 get_job_result result",
+  "$comment": "Proposed gateway contract only. The .invalid schema hostname is an identifier, not a deployed service. Application authorization and byte limits are additional requirements.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "job_id": {
+      "$ref": "common.schema.json#/$defs/job_id"
+    },
+    "result_state": {
+      "enum": [
+        "pending",
+        "available",
+        "deadline_exceeded",
+        "closed_without_result",
+        "purged"
+      ]
+    },
+    "result_schema": {
+      "$ref": "common.schema.json#/$defs/result_schema"
+    },
+    "outcome": {
+      "enum": [
+        "succeeded",
+        "failed"
+      ]
+    },
+    "result": {
+      "type": "object"
+    },
+    "result_hash": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    },
+    "result_received_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "late_arrival": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "job_id",
+    "result_state"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "result_state": {
+            "const": "available"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "result_schema",
+          "outcome",
+          "result",
+          "result_hash",
+          "result_received_utc"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "result_state": {
+            "const": "purged"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "result"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "result_state": {
+            "enum": [
+              "pending",
+              "deadline_exceeded",
+              "closed_without_result"
+            ]
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "outcome"
+              ]
+            },
+            {
+              "required": [
+                "result"
+              ]
+            },
+            {
+              "required": [
+                "result_hash"
+              ]
+            },
+            {
+              "required": [
+                "result_received_utc"
+              ]
+            },
+            {
+              "required": [
+                "late_arrival"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

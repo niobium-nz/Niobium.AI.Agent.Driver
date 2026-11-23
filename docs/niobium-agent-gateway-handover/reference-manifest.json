@@ -1,0 +1,144 @@
+{
+  "prepared_date": "2026-11-08",
+  "status": "planning_only_no_implementation_or_deployment",
+  "proposed_service": "Niobium.AgentGateway",
+  "repository_baselines": [
+    {
+      "repository": "niobium-nz/Niobium.Invoicing",
+      "commit": "1d7bd30b848fa0592656e7ca4a9671603252b918",
+      "selected_paths": [
+        "AGENTS.md",
+        "docs/architecture.md",
+        "docs/niobium-integration.md",
+        "src/Niobium.Invoicing.Server/Program.cs",
+        "src/Niobium.Invoicing.Server/Niobium.Invoicing.Server.csproj",
+        "infra/function-app.bicep"
+      ],
+      "file_urls": [
+        "https://github.com/niobium-nz/Niobium.Invoicing/blob/1d7bd30b848fa0592656e7ca4a9671603252b918/AGENTS.md",
+        "https://github.com/niobium-nz/Niobium.Invoicing/blob/1d7bd30b848fa0592656e7ca4a9671603252b918/docs/architecture.md",
+        "https://github.com/niobium-nz/Niobium.Invoicing/blob/1d7bd30b848fa0592656e7ca4a9671603252b918/docs/niobium-integration.md",
+        "https://github.com/niobium-nz/Niobium.Invoicing/blob/1d7bd30b848fa0592656e7ca4a9671603252b918/src/Niobium.Invoicing.Server/Program.cs",
+        "https://github.com/niobium-nz/Niobium.Invoicing/blob/1d7bd30b848fa0592656e7ca4a9671603252b918/src/Niobium.Invoicing.Server/Niobium.Invoicing.Server.csproj",
+        "https://github.com/niobium-nz/Niobium.Invoicing/blob/1d7bd30b848fa0592656e7ca4a9671603252b918/infra/function-app.bicep"
+      ]
+    },
+    {
+      "repository": "niobium-nz/Niobium.Store",
+      "commit": "a196fa29ee8e2896e684c826813f33102c976890",
+      "selected_paths": [
+        "README.md",
+        "AGENTS.md",
+        "docs/domain-data-access.md",
+        "src/Niobium.Store.Server/DependencyModule.cs"
+      ],
+      "file_urls": [
+        "https://github.com/niobium-nz/Niobium.Store/blob/a196fa29ee8e2896e684c826813f33102c976890/README.md",
+        "https://github.com/niobium-nz/Niobium.Store/blob/a196fa29ee8e2896e684c826813f33102c976890/AGENTS.md",
+        "https://github.com/niobium-nz/Niobium.Store/blob/a196fa29ee8e2896e684c826813f33102c976890/docs/domain-data-access.md",
+        "https://github.com/niobium-nz/Niobium.Store/blob/a196fa29ee8e2896e684c826813f33102c976890/src/Niobium.Store.Server/DependencyModule.cs"
+      ]
+    },
+    {
+      "repository": "niobium-nz/Niobium.Notification",
+      "commit": "adb9e59dd4428e1c8bf496fc40a42699bd003ba0",
+      "selected_paths": [
+        "AGENTS.md",
+        "docs/domain-data-access.md",
+        "docs/durable-submission.md",
+        "docs/http-client-configuration.md",
+        "src/Niobium.Notification.Server/DependencyModule.cs",
+        "src/Niobium.Notification.Core/Delivery/NotificationSubmission.cs",
+        "infra/main.bicep"
+      ],
+      "file_urls": [
+        "https://github.com/niobium-nz/Niobium.Notification/blob/adb9e59dd4428e1c8bf496fc40a42699bd003ba0/AGENTS.md",
+        "https://github.com/niobium-nz/Niobium.Notification/blob/adb9e59dd4428e1c8bf496fc40a42699bd003ba0/docs/domain-data-access.md",
+        "https://github.com/niobium-nz/Niobium.Notification/blob/adb9e59dd4428e1c8bf496fc40a42699bd003ba0/docs/durable-submission.md",
+        "https://github.com/niobium-nz/Niobium.Notification/blob/adb9e59dd4428e1c8bf496fc40a42699bd003ba0/docs/http-client-configuration.md",
+        "https://github.com/niobium-nz/Niobium.Notification/blob/adb9e59dd4428e1c8bf496fc40a42699bd003ba0/src/Niobium.Notification.Server/DependencyModule.cs",
+        "https://github.com/niobium-nz/Niobium.Notification/blob/adb9e59dd4428e1c8bf496fc40a42699bd003ba0/src/Niobium.Notification.Core/Delivery/NotificationSubmission.cs",
+        "https://github.com/niobium-nz/Niobium.Notification/blob/adb9e59dd4428e1c8bf496fc40a42699bd003ba0/infra/main.bicep"
+      ]
+    },
+    {
+      "repository": "Azure-Samples/remote-mcp-functions-dotnet",
+      "commit": "468c518c884ec318e3001b9573254c9e775409c9",
+      "selected_paths": [
+        "src/FunctionsMcpTool/HelloToolWithAuth.cs"
+      ],
+      "file_urls": [
+        "https://github.com/Azure-Samples/remote-mcp-functions-dotnet/blob/468c518c884ec318e3001b9573254c9e775409c9/src/FunctionsMcpTool/HelloToolWithAuth.cs"
+      ]
+    }
+  ],
+  "public_sources": [
+    {
+      "id": "P1",
+      "url": "https://developers.openai.com/workspace-agents/trigger-runs",
+      "use": "Upstream trigger/status protocol, not gateway application behavior"
+    },
+    {
+      "id": "P2",
+      "url": "https://developers.openai.com/workspace-agents/authentication",
+      "use": "Workspace Agent access tokens"
+    },
+    {
+      "id": "P3",
+      "url": "https://developers.openai.com/cookbook/examples/chatgpt/workspace_agents/workspace-agents-api-trigger",
+      "use": "Asynchronous trigger example and response compatibility"
+    },
+    {
+      "id": "P4a",
+      "url": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-mcp",
+      "use": "Functions MCP extension"
+    },
+    {
+      "id": "P4b",
+      "url": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-mcp-tool-trigger",
+      "use": "Native MCP tools"
+    },
+    {
+      "id": "P5",
+      "url": "https://developers.openai.com/plugins/build/auth",
+      "use": "ChatGPT OAuth requirements"
+    },
+    {
+      "id": "P6",
+      "url": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-mcp-tutorial",
+      "use": "Functions hosting and built-in authentication"
+    },
+    {
+      "id": "P7",
+      "url": "https://help.openai.com/en/articles/20001143-chatgpt-workspace-agents-for-enterprise-and-business",
+      "use": "Agent connections and action permissions"
+    },
+    {
+      "id": "P8a",
+      "url": "https://learn.microsoft.com/en-us/rest/api/storageservices/understanding-the-table-service-data-model",
+      "use": "Entity/property/key/null limits"
+    },
+    {
+      "id": "P8b",
+      "url": "https://learn.microsoft.com/en-us/azure/storage/tables/scalability-targets",
+      "use": "Table constraints"
+    },
+    {
+      "id": "P9a",
+      "url": "https://learn.microsoft.com/en-us/azure/storage/tables/table-storage-design",
+      "use": "Query and partition design"
+    },
+    {
+      "id": "P9b",
+      "url": "https://learn.microsoft.com/en-us/azure/storage/tables/table-storage-design-patterns",
+      "use": "Conditional and index design patterns"
+    }
+  ],
+  "verification_limits": [
+    "Selected source and documentation inspection only; not a full repository or deployed-service audit.",
+    "No gateway code exists in this package.",
+    "No .NET project restore/build, Azure deployment, ChatGPT OAuth connection or live agent dispatch was performed.",
+    "Versions, upstream contracts, tenant permissions and dependency warnings must be rechecked at implementation time.",
+    "Schema files are proposed local contracts and require application-level authorization, schema allowlisting and serialized-byte validation."
+  ]
+}
