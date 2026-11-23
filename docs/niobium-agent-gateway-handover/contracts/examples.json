@@ -1,0 +1,102 @@
+{
+  "dispatch": {
+    "target_agent": "research-v1",
+    "handoff_id": "price-review-20261108-research-001",
+    "input": {
+      "task": "Research the supplied products and save the report in the approved destination.",
+      "data": {
+        "product_ids": [
+          "P100",
+          "P200"
+        ],
+        "destination_ref": "approved-report-location"
+      }
+    }
+  },
+  "dispatch_accepted": {
+    "target_agent": "research-v1",
+    "handoff_id": "price-review-20261108-research-001",
+    "dispatch_state": "accepted",
+    "accepted_by": "chatgpt",
+    "conversation_url": null
+  },
+  "dispatch_unknown": {
+    "target_agent": "research-v1",
+    "handoff_id": "price-review-20261108-research-001",
+    "dispatch_state": "outcome_unknown",
+    "error_code": "upstream_outcome_unknown",
+    "retry_advice": "operator_action_required"
+  },
+  "agent_list": {
+    "agents": [
+      {
+        "target_agent": "research-v1",
+        "display_name": "Research agent",
+        "description": "Research approved inputs and save to approved destinations."
+      }
+    ]
+  },
+  "start_job": {
+    "target_agent": "research-v1",
+    "handoff_id": "price-review-20261108-research-002",
+    "input": {
+      "task": "Return structured research findings.",
+      "data": {
+        "product_ids": [
+          "P100",
+          "P200"
+        ]
+      }
+    },
+    "result_schema": "product-research.v1",
+    "completion_mode": "store_only"
+  },
+  "start_job_with_parent": {
+    "target_agent": "research-v1",
+    "handoff_id": "price-review-20261108-research-003",
+    "input": {
+      "task": "Return structured research findings.",
+      "data": {}
+    },
+    "result_schema": "product-research.v1",
+    "completion_mode": "notify_parent",
+    "continuation_ref": "approved-parent-session-001"
+  },
+  "submit_result": {
+    "job_id": "job_v1_0123456789abcdef0123456789abcdef",
+    "completion_capability": "SYNTHETIC-PLACEHOLDER-NOT-A-VALID-TOKEN",
+    "outcome": "succeeded",
+    "result": {
+      "findings": [],
+      "summary": "No supported matches found."
+    }
+  },
+  "get_job": {
+    "job_id": "job_v1_0123456789abcdef0123456789abcdef"
+  },
+  "result_pending": {
+    "job_id": "job_v1_0123456789abcdef0123456789abcdef",
+    "result_state": "pending"
+  },
+  "result_available": {
+    "job_id": "job_v1_0123456789abcdef0123456789abcdef",
+    "result_state": "available",
+    "result_schema": "product-research.v1",
+    "outcome": "succeeded",
+    "result": {
+      "findings": [],
+      "summary": "No supported matches found."
+    },
+    "result_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "result_received_utc": "2026-11-08T10:00:00Z",
+    "late_arrival": false
+  },
+  "result_purged": {
+    "job_id": "job_v1_0123456789abcdef0123456789abcdef",
+    "result_state": "purged",
+    "result_schema": "product-research.v1",
+    "outcome": "succeeded",
+    "result_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "result_received_utc": "2026-11-08T10:00:00Z"
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.niobium.invalid/agent-gateway/common.schema.json",
+  "title": "Shared proposed Niobium AgentGateway contract fields",
+  "$defs": {
+    "target_agent": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+    },
+    "handoff_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "conversation_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "task": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384
+        },
+        "data": {
+          "type": "object",
+          "maxProperties": 1024,
+          "default": {}
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "$comment": "Enforce non-whitespace task, 16 KiB canonical UTF-8 input, depth <= 32 and <= 1024 properties across the whole value at runtime. JSON Schema string lengths do not measure serialized byte lengths."
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^job_v1_[A-Za-z0-9_-]{16,128}$"
+    },
+    "result_schema": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "continuation_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "conversation_url": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://chatgpt\\.com/"
+        }
+      ]
+    },
+    "safe_error_code": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 80,
+      "pattern": "^[a-z0-9_]+$"
+    }
+  }
+}

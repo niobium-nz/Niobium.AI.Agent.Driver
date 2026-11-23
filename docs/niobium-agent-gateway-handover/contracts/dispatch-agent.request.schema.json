@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.niobium.invalid/agent-gateway/dispatch-agent.request.schema.json",
+  "title": "Stage 1 dispatch_agent input",
+  "$comment": "Proposed gateway contract only. The .invalid schema hostname is an identifier, not a deployed service. Application authorization and byte limits are additional requirements.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "target_agent": {
+      "$ref": "common.schema.json#/$defs/target_agent"
+    },
+    "handoff_id": {
+      "$ref": "common.schema.json#/$defs/handoff_id"
+    },
+    "input": {
+      "$ref": "common.schema.json#/$defs/input"
+    },
+    "conversation_key": {
+      "$ref": "common.schema.json#/$defs/conversation_key"
+    }
+  },
+  "required": [
+    "target_agent",
+    "handoff_id",
+    "input"
+  ]
+}
