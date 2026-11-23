@@ -28,6 +28,7 @@ public sealed class AgentMaintenanceDomain(Lazy<IRepository<AgentMaintenance>> r
 
     public Task<EntityBag<AgentJob>> PageAsync(AgentMaintenance claim, CancellationToken token)
     {
+        CheckInitialized();
         Validate(claim);
         if (claim.WorkspaceKey != PartitionKey) { throw new JobException(JobError.InvalidRequest); }
         return jobs.Value.GetAsync(claim.WorkspaceKey + ":" + claim.Shard.ToString("x", System.Globalization.CultureInfo.InvariantCulture),
@@ -49,6 +50,7 @@ public sealed class AgentMaintenanceDomain(Lazy<IRepository<AgentMaintenance>> r
 
     private async Task<AgentMaintenance?> ReadAsync(CancellationToken token)
     {
+        CheckInitialized();
         AgentMaintenance? current = await Repository.RetrieveAsync(PartitionKey, RowKey, cancellationToken: token);
         if (current is not null)
         {

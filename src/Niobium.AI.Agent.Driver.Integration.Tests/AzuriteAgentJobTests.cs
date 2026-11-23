@@ -53,7 +53,6 @@ public sealed class AzuriteAgentJobTests
                 JobId = created.JobId, CompletionCapability = capabilities.Issue(created), Outcome = JobOutcome.Succeeded,
                 Result = JsonSerializer.SerializeToElement(new { summary = "Local synthetic result", data = new { marker = 42 } })
             };
-            // Competing callback and acceptance writes must retain both facts regardless of order.
             Task<JobResultReceipt> callback = Domain().SubmitAsync(writer, completion, capabilities, settings, now, token);
             Task<AgentJob> acceptance = Domain().RecordDispatchAsync(claim,
                 new(created.TargetAgent, created.HandoffId, DispatchState.Accepted), now, token);
@@ -65,7 +64,7 @@ public sealed class AzuriteAgentJobTests
             TableClient rawTable = service.GetTableClient(table);
             TableEntity before = (await rawTable.GetEntityAsync<TableEntity>(stored.WorkspaceShard, stored.JobId, cancellationToken: token)).Value;
             Assert.IsTrue(before.ContainsKey(nameof(AgentJob.RequestJson))); Assert.IsTrue(before.ContainsKey(nameof(AgentJob.ResultJson)));
-            Assert.IsFalse(before.Values.OfType<string>().Any(value => value.Contains(completion.CompletionCapability, StringComparison.Ordinal)));
+            Assert.IsFalse(before.Select(pair => pair.Value).OfType<string>().Any(value => value.Contains(completion.CompletionCapability, StringComparison.Ordinal)));
             AgentJob purged = await Domain().MaintainAsync(now.AddDays(31), 30, token);
             Assert.AreEqual(JobResultState.Purged, (JobResultState)purged.ResultStateCode);
             TableEntity after = (await rawTable.GetEntityAsync<TableEntity>(stored.WorkspaceShard, stored.JobId, cancellationToken: token)).Value;
@@ -99,7 +98,6 @@ public sealed class AzuriteAgentJobTests
                 AgentMaintenanceDomain domain = new(new(() => cursors), [], new(() => jobs)); domain.Initialize("adapter-jobs", "jobs-v1"); return domain;
             }
             DateTimeOffset now = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-            // Synthetic IDs deliberately share shard zero to prove continuation between pages.
             for (int i = 1; i <= 3; i++)
             {
                 AgentJob row = Intent(Caller("owner"), Caller("writer"), Settings(), now) with
@@ -116,8 +114,7 @@ public sealed class AzuriteAgentJobTests
             Assert.AreEqual(1, next.Count); Assert.AreNotEqual(page[0].JobId, next[0].JobId);
             Assert.IsNull(await Domain().CheckpointAsync(claim with { Generation = claim.Generation + 1 }, null, now, false, token));
             AgentMaintenance released = (await Domain().CheckpointAsync(checkpoint, checkpoint.Cursor, now, true, token))!;
-            Assert.IsNull(released.LeaseOwner);
-            Assert.AreEqual(checkpoint.Cursor, released.Cursor);
+            Assert.IsNull(released.LeaseOwner); Assert.AreEqual(checkpoint.Cursor, released.Cursor);
         }
         finally
         {
