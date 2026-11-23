@@ -1,31 +1,43 @@
-# Stage 1 Agent Gateway architecture
+# Agent Gateway architecture
 
-This implementation follows the [handover](niobium-agent-gateway-handover/Niobium.AgentGateway.Implementation-Plan.md). It retains this repository's `Niobium.AI.Agent.Driver` name. Stage 2 is not started. Deployment does not activate dispatch: both the application default and `infra/main.bicep` set `AgentGatewayOptions__Enabled=false`.
+The [handover](niobium-agent-gateway-handover/Niobium.AgentGateway.Implementation-Plan.md) separates persistence-free Stage 1 from opt-in durable Stage 2. Stage 1 was merged in PR #5; PR #6 adds tracked results plus separately disabled provider observation and allowlisted parent continuation. Source deployment neither proves live OAuth compatibility nor authorizes external agent execution.
 
-## Boundaries
+## Boundaries and transport
 
-`Server -> Core -> Contracts`. Contracts contain transport-neutral request/result records and explicit stable wire enums. Core owns configuration entities, rich Niobium domains, validation, canonical serialization, retry classification and coordinating flows. Server owns the native Azure Functions MCP boundary, Entra access-token validation, outbound HTTP, composition and the local operator command.
+`Server -> Core -> Contracts`. Contracts contain public wire records and finite enums. Core owns entities, rich Niobium domains, canonical serialization, identity, validation, state transitions and coordinating flows. Server owns native Azure Functions MCP, delegated token validation, signed capability implementation, HTTP, timer entry points and composition. Azure SDK clients occur in framework adapters and test fixtures, not business flows.
 
-Only `list_agents` and `dispatch_agent` are native MCP tools at `/runtime/webhooks/mcp`. `NativeGatewayFunctions` is the transport entry point; `GatewayTools` authenticates and translates domain results into `CallToolResult` objects. The result contains a structured object and a matching JSON text block. No HTTP endpoint impersonates MCP, and no JSON-encoded string is passed off as structured content.
+At `/runtime/webhooks/mcp`, `list_agents` and `dispatch_agent` keep their Stage 1 contracts. `start_agent_job`, `submit_job_result`, `get_job_status` and `get_job_result` are additive and disabled by default. Thin triggers call boundary services; structured responses match their JSON text. Dispatch/start/submit remain consequential tools. No ordinary HTTP route impersonates MCP.
 
-The extension's typed argument converter can coerce numbers, dates, GUIDs and case-distinct property names. Dispatch therefore reads the original trigger binding JSON for arguments; the typed context is used for transport identity only. `NativeArgumentsTests` is the regression guard. Runtime wire compatibility remains an explicit gate, not an inference from these tests.
+The extension's typed converter can coerce numbers, dates/GUIDs and case-distinct keys. Model data therefore comes from original binding JSON; the typed transport supplies validated identity only. Native host tests discover all six tools with execution disabled. The read-only protected-endpoint probe additionally supports authenticated initialization/discovery/caller checks once an operator supplies real prerequisites.
 
-## Current authorization and configuration
+## Authorization and persistence
 
-`AgentRegistrationDomain` decides whether an alias is enabled and valid. `AgentGrantDomain` checks principal partition, version, permission, enabled state and expiry. Flows use `IDomainRepository`, not Azure SDK clients. The Server explicitly calls `Niobium.Platform.StorageTable.DependencyModule.AddDatabase`.
+Registration and grant domains check current repository rows, not cached initialized snapshots. Version-1 configuration is dispatch-only; version-2 registrations add immutable result schema/writer, and grants explicitly separate CanDispatch, CanStartJob and CanSubmitResult. Only the validated initiating connection can read its results. A completion also needs the exact job capability and current writer grant.
 
-A Niobium forced single-row lookup can still return a partition-cached domain. Dispatch explicitly reloads the grant and registration before checking permission, avoiding cached authorization after a prior partition listing. There is no authorization cache in the gateway.
+`McpCallerContextAdapter` validates single-tenant issuer, audience, lifetime, delegated scope and allowed client. Model-supplied caller/workspace/agent identity and spoofed platform headers are not authorization evidence. OAuth, managed identity, upstream tokens and job-capability keys are separate credentials.
 
-The only application tables are `AgentRegistration` and `AgentGrant`. Keys and ETags use Niobium mapping attributes. No input, event fingerprint, handoff, status, run result or recovery queue is persisted. Registry writes are operator-only conditional writes through domains. A fresh WriteId and full read-back equality check detect missing write-response ETags and conflicting post-write snapshots. This does not replace service-side ETag preconditions.
+The Server explicitly composes `Niobium.Platform.StorageTable`. Normal infrastructure stages only AgentRegistration/AgentGrant. Tracked and parent-route storage require separate parameter files. Operator-only configuration uses current ETags and full WriteId read-back verification. No model-facing route/grant management exists.
 
-## Submission and retries
+## Stage 1 and tracked dispatch
 
-The writer rejects unknown request fields, duplicate JSON properties, invalid aliases/event IDs, nonobject data, excessive depth/properties and excessive canonical UTF-8 input size. It sorts object keys ordinally, preserves arrays/text, and emits numeric tokens without floating-point conversion. It also checks the final escaped provider body size.
+Stage 1 validates canonical input/body byte limits, IDs, unknown fields, duplicates, depth and property counts. It sorts object keys while preserving array order/text/numeric tokens. It owns bounded immediate retries with frozen bytes and stable idempotency keys. The typed transport has a fixed provider origin, disabled redirects and no inherited retry/logging handlers. A known 202 is acceptance regardless of optional response metadata. Stage 1 does not read that metadata or write a job ledger.
 
-One deterministic envelope is serialized as the provider's string `input`. The request bytes and idempotency header are frozen for immediate retries. The versioned SHA-256 key uses length-prefixed workspace, validated principal, immutable channel and event identity. Conversation keys are separately namespaced by workspace/principal/target and require both global and per-registration permission.
+Tracked starts commit an immutable request before submission. HMAC job identity binds workspace, initiating principal, target alias and handoff ID; a separate fingerprint detects changed content/settings. Scalar AgentJob snapshots carry independent dispatch/result/provider/continuation states. Claims record owner/generation/first attempt/lease. Every conditional replacement verifies the complete intended WriteId snapshot, excluding only ETag. A competing writer's ETag is not evidence of ownership.
 
-The sole outbound origin is `https://api.chatgpt.com`. The client does not follow redirects, and its registered pipeline removes additional retry handlers while preserving the platform primary transport. It uses response-headers completion and never reads optional response metadata. A known 202 is acceptance even if the body is empty, malformed or fails later. `conversation_url` is deliberately omitted in this version.
+Callbacks store an immutable result. Identical retries receive its original receipt; different results conflict. Acknowledgment and observation writes reload current state so callback races preserve both facts. Available results suppress redispatch regardless of an uncertain earlier submission. The raw completion capability is reconstructed from immutable claims/versioned keys and sent only to B, not persisted or returned to A.
 
-There are at most three attempts, eight seconds per attempt and a linked 25-second end-to-end budget including authentication and configuration reads. 429 respects Retry-After if it fits. 408, 5xx and post-send network/cancellation errors preserve uncertainty. A later rejection cannot erase earlier uncertainty; a subsequent 202 can establish acceptance.
+## Optional observation and continuation
 
-Acceptance is not completion. Stage 1 provides neither exactly-once execution nor permanent deduplication. It cannot detect a later reuse of an event ID with changed input. Callers must preserve the target, handoff ID and complete content for retries.
+`IWorkspaceAgentRunClient` extends the existing typed provider client. Only an opted-in tracked dispatch requests beta run metadata. Optional metadata reads are bounded and occur after acceptance; failure cannot trigger another POST. The worker makes a bounded GET for a known matching run ID. Known statuses map to finite observation codes; unknown statuses never authorize another send. Completed does not mean ResultAvailable.
+
+`AgentContinuationRouteDomain` holds operator-approved immutable owner/alias/channel/credential/API-conversation bindings. The start request supplies only a reference. Current route, grant and registration/reuse policy are checked before delivery. Binding snapshots are persisted with the job so a later configuration change cannot redirect an old notification.
+
+First completion stores the result and Pending notification together in the same conditional AgentJob write. The timer later claims that outbox and submits a deterministic result-ready event, using a stable key distinct from B's original event. The parent reads the authorized stored result. An unknown response or expired Sending lease is held, never automatically replayed after restart. This is a new API-triggered event in a known API conversation, not arbitrary ChatGPT UI-thread resume.
+
+## Maintenance, rollout and evidence
+
+A persisted leased workspace cursor traverses sixteen shards in bounded one-row pages, retaining progress and wrapping fairly. The worker can submit only proven never-attempted jobs after authorization. It also performs enabled observations/notifications, deadlines and physical replacement cleanup. Unknown initial dispatches and unresolved notifications prevent automatic purge. Cleanup waits for capability expiry even when configured payload retention is shorter, preserving valid duplicate callbacks. Compact deduplication tombstones remain.
+
+Version-1 store-only jobs stay readable; optional jobs use version 2. Global gateway, tracked starts/access, maintenance, polling and parent continuation default off, and normal IaC host-disables the timer. Browser CORS now defaults to an empty allowlist and no credentials. No anonymous MCP bypass or live OAuth enrollment is introduced. Keep the upgraded callback/reader binary when disabling version-2 starts.
+
+See [tracked jobs](tracked-jobs.md), [follow-ups](job-follow-ups.md), [protected acceptance](protected-gateway-acceptance.md) and [implementation progress](implementation-progress.md). Treat source tests, real-adapter tests, native MCP wire checks, deployed health, authenticated ingress and actual agent acceptance as distinct evidence.

@@ -47,7 +47,6 @@ public static class Program
         }
         catch (Exception)
         {
-            // SDK exception details can include entity values. Report only a safe failure category.
             Console.Error.WriteLine("registry_operation_failed");
             Environment.ExitCode = 1;
         }
@@ -60,6 +59,7 @@ public static class Program
         builder.AddPlatform();
         builder.AddAgentGateway();
         builder.ConfigureGatewayTools();
+        builder.AddAgentJobs();
         builder.UsePlatform();
         return builder.Build();
     }

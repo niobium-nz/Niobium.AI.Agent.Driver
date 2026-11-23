@@ -2,7 +2,7 @@ using Niobium.AI.Agent.Driver.Contracts;
 
 namespace Niobium.AI.Agent.Driver.Core;
 
-/// <summary>Stage 1 settings. No job persistence, background execution or result tracking.</summary>
+/// <summary>Stage 1 is dispatch-only. Tracked starts, access and optional follow-ups require separate opt-ins.</summary>
 public sealed class AgentGatewayOptions
 {
     public bool Enabled { get; set; }
@@ -15,6 +15,11 @@ public sealed class AgentGatewayOptions
     public int MaxRegistryEntries { get; set; } = 256;
     public bool AllowConversationReuse { get; set; }
     public Dictionary<string, string> CredentialAliases { get; set; } = new(StringComparer.Ordinal);
+    public bool EnableTrackedJobs { get; set; }
+    public bool EnableTrackedJobAccess { get; set; }
+    public bool EnableJobMaintenance { get; set; }
+    public bool EnableProviderRunPolling { get; set; }
+    public bool EnableParentContinuation { get; set; }
 
     public bool IsValid()
     {
@@ -23,12 +28,12 @@ public sealed class AgentGatewayOptions
             && MaxDispatchAttempts is >= 1 and <= 3
             && MaxInputBytes is >= 1 and <= 16384
             && MaxProviderBodyBytes is >= 1024 and <= 65536
-            && MaxRegistryEntries is >= 1 and <= 1024;
-        if (!limitsValid || !Enabled)
-        {
-            return limitsValid;
-        }
-
+            && MaxRegistryEntries is >= 1 and <= 1024
+            && (!EnableTrackedJobs || EnableTrackedJobAccess)
+            && (!EnableJobMaintenance || EnableTrackedJobAccess)
+            && (!EnableProviderRunPolling || EnableTrackedJobAccess)
+            && (!EnableParentContinuation || EnableTrackedJobAccess);
+        if (!limitsValid || !Enabled) { return limitsValid; }
         return IdentifierRules.IsAlias(InternalWorkspaceKey)
             && CredentialAliases.Count > 0
             && CredentialAliases.All(pair => IdentifierRules.IsAlias(pair.Key)
@@ -39,14 +44,9 @@ public sealed class AgentGatewayOptions
 
     public void RequireCaller(CallerContext caller)
     {
-        if (!Enabled)
-        {
-            throw new GatewayException(GatewayError.GatewayDisabled);
-        }
+        if (!Enabled) { throw new GatewayException(GatewayError.GatewayDisabled); }
         if (!IsValid() || caller.WorkspaceKey != InternalWorkspaceKey || !caller.HasDispatchScope)
-        {
-            throw new GatewayException(GatewayError.Forbidden);
-        }
+        { throw new GatewayException(GatewayError.Forbidden); }
     }
 }
 
@@ -59,15 +59,11 @@ public sealed class GatewayException(GatewayError code) : Exception(code.ToStrin
 public static class IdentifierRules
 {
     public static bool IsAlias(string? value) => value is { Length: >= 1 and <= 64 }
-        && IsLowerAlphaNumeric(value[0])
-        && value.All(c => IsLowerAlphaNumeric(c) || c == '-');
-
+        && IsLowerAlphaNumeric(value[0]) && value.All(c => IsLowerAlphaNumeric(c) || c == '-');
     public static bool IsEventId(string? value) => value is { Length: >= 1 and <= 128 }
         && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or ':' or '-');
-
     public static bool IsChannel(string? value) => value is { Length: > 6 and <= 160 }
         && value.StartsWith("agtch_", StringComparison.Ordinal)
         && value.AsSpan(6).ToArray().All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
-
     private static bool IsLowerAlphaNumeric(char value) => value is >= 'a' and <= 'z' or >= '0' and <= '9';
 }

@@ -15,6 +15,9 @@ param appSettings array = []
 @description('Custom domain name bind to the container app.')
 param customDomainName string = ''
 
+@description('Explicit browser origins approved by the operator. Empty by default; server-to-server MCP needs no browser CORS permission. Do not use wildcards.')
+param allowedCorsOrigins array = []
+
 @description('Memory allocated to each function instance in MB.')
 param instanceMemoryMB int = 512
 
@@ -123,9 +126,8 @@ module functionApp 'br/public:avm/res/web/site:0.24.0' = {
     siteConfig: {
       alwaysOn: false
       cors: {
-        allowedOrigins: [
-          '*'
-        ]
+        allowedOrigins: allowedCorsOrigins
+        supportCredentials: false
       }
     }
     functionAppConfig: {

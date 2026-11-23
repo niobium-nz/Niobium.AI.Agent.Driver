@@ -1,38 +1,35 @@
-# Agent Gateway implementation progress
+# Implementation progress
 
-## Scope and branch
+## Baselines and delivery
 
-Implements the Stage 1 source path from the handover on Driver baseline `56c92c72538bdcf7e48abe0a3396b6a54e0e0569`. Stage 2 is not started. Work continues on `feature/agent-gateway-stage1`, superseding the original `codex/agent-gateway-stage1` branch and PR #4. Consult the replacement PR for its exact head and terminal workflow results; older passing evidence does not certify a new commit.
+Stage 1 PR #5 was merged to `main` as `a2b701b9e98f500092a27ac2ac8acaef2ce4ca44`. Its merge-triggered production deployment and read-only checks passed. No live dispatch activation was implied.
 
-## Implemented source
+Stage 2 is being delivered in PR #6 on `feature/agent-job-results`. The store-only baseline `d24e8a002b81a8bfca2efdb0a0ef5127c343623a` passed 109 unit tests, 8 local integration tests, 95.17% combined coverage, packaging, exact-commit test deployment and independent health verification in Actions run 45154757229. This historical evidence does not certify later commits.
 
-Contracts/Core/Server layering; native list_agents and dispatch_agent; bounded deterministic handoff encoding; principal-scoped grants; current-row domain authorization; conditional operator writes with full WriteId read-back verification; fixed-origin provider client with bounded same-key retries and uncertainty preservation; independently validated delegated bearer identity; disabled-by-default composition; configuration-only Table provisioning; mandatory-auth deployment template; operator command; unit, Azurite, composition and native MCP tests; development/security/operations guides.
+The follow-up commit `93a24949053cd5ec447c20b678bf2dca333a1f46` adds optional provider observation and parent notification. Its build, unit/integration tests and unchanged coverage gate passed in run 45162456012 while the next activation-probe/CORS changes were being prepared. The final PR description records the terminal exact-head results; no local .NET execution in the authoring container is claimed.
 
-Original binding JSON preserves task numbers, strings and case-distinct keys. Current authorization is read directly inside each domain from its repository so cached snapshots cannot revive a revoked or deleted grant/registration. Regression tests cover these cases.
+## Original plan coverage
 
-## Feature delivery correction
+| Work package | Source status | Acceptance boundary |
+| --- | --- | --- |
+| S1.1 compatibility/authentication | Native MCP, validated Entra caller adapter, mandatory-auth template and read-only acceptance probe implemented | Actual ChatGPT OAuth discovery/client/redirect/refresh and all deployed ingress checks remain outstanding |
+| S1.2-S1.4 core dispatch | Registry/grants, deterministic HTTP policy, native tools and setup instructions implemented | Harmless live A-to-B trial requires approved agents, credentials and explicit execution authorization |
+| S1.5 infrastructure/operations | Existing trusted pipeline retained, defaults disabled, restrictive CORS default, operating guides and independent health evidence | Applying mandatory OAuth requires a reviewed authenticated-harness transition and real telemetry privacy evidence |
+| S2.1-S2.2 tracked result exchange | Durable identity, conditional state, completion capabilities, duplicate-safe results, owner reads implemented | Live A-to-B-to-result trial and issued-job rollback verification remain environment-specific |
+| S2.3 maintenance and optional polling | Bounded persisted sweeps, leases, deadlines, retention and opt-in run-status observer implemented | Beta API compatibility must be demonstrated with an approved test run; missing IDs do not trigger redispatch |
+| S2.4 optional parent continuation | Operator routes, atomic same-row result/outbox, deterministic notification and fenced claims implemented | Actual API-conversation routing trial remains required; arbitrary ChatGPT UI-thread resume is not supported |
+| S2.5 failure tests/rollout | Added concurrency, recovery, rollback, authorization, HTTP and real Table tests | Independent approval plus final live acceptance are not replaced by unit tests or disabled deployments |
 
-All new branches must start with `feature/`. The reviewed workflow already deploys every non-main push to test. The original failure of `Test deployment verified` came from changing the protected pipeline definition, not from a missing deployment trigger.
+## Additional source improvements
 
-The correction restores `.github/workflows/azure-deploy.yml` and `azure.yaml` byte-for-byte to their reviewed main versions. The trusted status controller, policy, coverage script and independent deployment harness remain unchanged. Local service setup now belongs to the integration-test assembly, so both the existing CI command and the existing prepackage command execute real persistence and native MCP tests with owned pinned dependencies. No tests or coverage thresholds are skipped or lowered. See [feature branch delivery](feature-branch-delivery.md).
+A review finding in the store-only baseline exposed the case where short retention could purge a result while its callback capability remained valid. Cleanup now waits for capability expiry as well as terminal disposition and retention. A duplicate during that period receives its original receipt. Pending or uncertain parent notifications also prevent automatic payload purge.
 
-## Addressed review findings from PR #4
+`AgentJob` version 2 adds optional observation and continuation fields without changing the version-1 store-only contract. No automatic backfill is needed. New follow-up flags default off; ordinary IaC also pins them off. The parent route table is only in explicit storage-staging parameters. No model-facing arbitrary URL, channel, token or conversation-binding operation was added.
 
-- The stable target alias joins workspace, principal, immutable channel and event ID in the idempotency key. Distinct aliases sharing a channel no longer collide.
-- Cancellation during authentication before a dispatch flow starts returns deadline_exceeded and same-event retry advice, not an operator configuration error.
-- Tenant GUIDs use one lowercase canonical representation for discovery, exact issuer validation and principal derivation.
-- Each retry tracks whether that attempt started a send. Cancelling an unstarted retry preserves the previous definitive rate-limit response rather than inventing uncertainty.
+See [job follow-ups](job-follow-ups.md) for optional contract/state/rollback details and [protected gateway acceptance](protected-gateway-acceptance.md) for the read-only operator probe. The new probe does not modify the trusted readiness controller or fabricate any success status. Missing live token prerequisites are reported as skipped and cause failure.
 
-New regression tests cover each correction. Native code/security review must be repeated for the replacement head.
+## Still not performed or claimed
 
-## Historical observed evidence
+No production activation, agent publication, workspace permission change, live billable agent trigger, live result submission, live continuation binding, new application queue or package publication was performed. Real tenant/client configuration and approved credentials are not values to invent in source. Telemetry must be inspected on the actual deployed platform. Keep callbacks/readers on the updated binary when rolling back version-2 starts; disabling flags is not equivalent to deploying an older binary that cannot read version 2.
 
-Original head `0125b66e0443d779024ab7383235a02815f3c3ae` passed [run 45142441992](https://github.com/niobium-nz/Niobium.AI.Agent.Driver/actions/runs/45142441992): build, Bicep, 68 unit tests, 3 integration tests, the disabled native wire probe, 93.50% combined coverage, packaging, Azure test deployment and the independent health harness. Its required trusted status failed because its workflow files differed from main. Those results are historical, not proof of the new feature head.
-
-The authoring environment has no .NET SDK and cannot resolve github.com for cloning. Changes are made through the GitHub connector and executable .NET/Azure evidence is obtained from actual GitHub Actions runs. No local authoring-environment .NET pass is claimed.
-
-## Remaining gates
-
-Before merging: successful exact-head build/tests/coverage, test deployment, independent trusted-main verification, the real Test deployment verified status, independent approval and resolved findings. The feature correction does not require accepting a modified candidate workflow as trusted.
-
-Before enabling dispatch: validate actual ChatGPT OAuth discovery/client/redirect settings and claims; prove mandatory authentication at every host path; restrict CORS; adapt health probes; verify telemetry redaction; perform an authorized harmless nonproduction A-to-B trial. Dispatch remains disabled by default. No anonymous MCP bypass, production activation, live agent call or Stage 2 implementation is included.
+Additional result-reader policies, automatic operator resolution of ambiguous jobs, identity-key migration and high-scale indexed scheduling remain separately reviewable operational extensions, not prerequisites for this bounded initial implementation.

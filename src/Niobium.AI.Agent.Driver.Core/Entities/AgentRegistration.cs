@@ -18,4 +18,7 @@ public sealed record AgentRegistration
     public bool AllowConversationReuse { get; set; }
     public int MaxInputBytes { get; set; } = 16384;
     public string WriteId { get; set; } = "";
+    // Version 2 only. A single reviewed result schema and independently authenticated completion writer.
+    public string ResultSchema { get; set; } = "";
+    public string ResultWriterPrincipalKey { get; set; } = "";
 }

@@ -2,28 +2,42 @@
 
 ## Identities and trust
 
-There are three independent identities: the incoming ChatGPT-connected Entra principal/client, the Function App managed identity for Azure resources, and the owner/scope of the server-held Workspace Agent token. No incoming bearer is forwarded upstream. Tokens never belong in tool arguments, results, registration rows, task envelopes or diagnostic exception text.
+Separate incoming Entra principal/client, Function managed identity, Workspace Agent token owner/scope and job-capability signing identities. No incoming bearer is forwarded upstream. Credentials never belong in tool outputs, general-purpose registry/job rows, exception text or logs. Only B's task envelope receives its completion capability; parent notifications contain only bounded IDs/hash metadata.
 
-The gateway does not authenticate an exact Workspace Agent name. Two agents using the same connection/principal may be indistinguishable and share its grant boundary. Different privileges require independently distinguishable authenticated connections, verified in the actual ChatGPT builder.
+A shared OAuth connection cannot distinguish exact Workspace Agent runtimes. Distinct privileges require independently distinguishable approved connections in the actual builder. OAuth plus a job capability plus current grants proves permission and possession, not agent-runtime attestation.
 
-`McpCallerContextAdapter` verifies the bearer cryptographically with trusted single-tenant Entra discovery/JWKS and exact issuer/audience/lifetime checks. It ignores `X-MS-CLIENT-PRINCIPAL` and other claimed identity headers as identity evidence. Caller-supplied workspace/source agent/callback URL/token/channel fields are not accepted. Only Streamable HTTP transport is accepted.
+`McpCallerContextAdapter` validates bearer signatures and exact single-tenant issuer/audience/lifetime/client/scope. Tenant IDs are canonicalized. It ignores claimed X-MS-CLIENT-PRINCIPAL headers and accepts only the supported Streamable HTTP context. Model-supplied callers, arbitrary URLs, channel IDs, tokens and raw parent-conversation bindings are not authority.
 
-## Deployment ordering is a release gate
+## Deployment ordering
 
-This change never sets the MCP webhook authorization level to Anonymous. The app and IaC both remain disabled. `infra/gateway-auth.bicep` is a separately reviewed template for mandatory App Service authentication, HTTPS and unauthenticated 401 responses. It does not enable the gateway, configure a guessed ChatGPT redirect, or change the webhook key level.
+Ordinary IaC disables dispatch, tracked features, both optional follow-ups and the maintenance timer. No change here sets the native webhook level to Anonymous. The separate mandatory App Service OAuth template protects execution paths with HTTPS and unauthenticated 401, without guessed client redirects.
 
-Before activation, prove mandatory OAuth on every reachable execution path, including the raw Azure hostname. Test without a bearer, with spoofed platform headers, with invalid/expired/wrong-audience tokens, without scope and with an unauthorized client/principal. Test with a valid MCP system key during the pre-bypass stage so a 401 from key authentication is not mistaken for proof of OAuth. Configure discovery/registration using the current actual ChatGPT OAuth flow; source inspection is not proof of compatibility.
+Before activation, prove actual ChatGPT discovery, client registration, redirect, consent and refresh. Test every raw/custom ingress with missing/spoofed credentials, invalid/expired/wrong-audience tokens, missing scope and unauthorized clients. When native system-key authentication remains active, include a valid system key in a separately authorized negative OAuth trial so a key-only 401 is not mistaken for OAuth rejection. The read-only probe is for the reviewed OAuth-facing deployment; it deliberately cannot pass its positive checks when an unsupplied native key is still required.
 
-Only after that evidence may a reviewed deployment set `AzureFunctionsJobHost__extensions__mcp__system__webhookAuthorizationLevel=Anonymous` behind mandatory OAuth. Do not combine unverified authentication setup and anonymous activation in one deployment. The final activation change must also update authenticated health/deployment probes and eliminate the scaffold's wildcard CORS configuration as appropriate to the verified client. The current public health probe is scaffold readiness metadata, not evidence that MCP authentication works.
+Only a separately reviewed activation supported by that evidence may change native key requirements. Default CORS is now an empty browser allowlist with credentials disabled; exceptions require explicit reviewed origins, never wildcards. CORS does not replace authentication. The unchanged trusted scaffold health harness must transition to authenticated probes before mandatory OAuth covers all paths. The new read-only probe does not itself change trusted CI policy.
 
-## Authorization and outbound isolation
+## Current authorization and routing
 
-Only enabled, version-1 registrations with allowlisted credential aliases and current principal grants may dispatch. Expiry, enabled state and permission are evaluated on the current request. Current rows are explicitly reloaded even after cached domain listings. Registration channel and credential alias bindings cannot be rebound in place.
+Stage 1 dispatch requires a current enabled registration and dispatch grant. New tracked jobs need explicit version-2 start permission. Completion binds persisted workspace, job, target, writer, operation, nonce, expiry and signing-key version and rechecks current completion grants/binding. Reads remain initiating-principal-only; opaque IDs do not grant access. No new permission is inferred from version-1 grants.
 
-The provider origin and route shape are fixed, channel characters are constrained, redirects are disabled and no tool accepts arbitrary URLs or headers. The typed HTTP pipeline has a single retry owner. Server logging records only an opaque event digest, public target alias, outcome, attempt count and duration; it does not read provider response bodies or log exception objects. Review platform/Azure SDK telemetry configuration as part of deployment acceptance to ensure request/body/header capture is disabled; application tests alone do not certify platform telemetry.
+Registration channel/credential and version-2 schema/writer bindings are immutable. Operator continuation routes also have immutable owner, destination and actual API conversation. Parent notifications require a current enabled/unexpired matching route, the owner's current parent dispatch grant, matching enabled registration and both global/registration reuse permission. Route/grant revocation holds an unsent notification; it cannot undo an already accepted external action.
 
-`dispatch_agent` is consequential and may incur charges or activate a more privileged agent. It is not marked read-only. Approval to dispatch does not authorize every action the target could perform. Keep target-agent destination restrictions and approval requirements intact.
+Outbound routes are fixed at the Workspace Agents origin, with validated channel/run identifiers and redirects disabled. Polling is separately opt-in and read-only, with bounded body/time/rate policy and current authorization. Optional POST run metadata cannot change known acceptance or cause a duplicate send. Provider completion is observation only and does not assert result availability or user approval.
 
-## Limits and known boundaries
+## Capabilities, concurrency and retention
 
-Stage 1 keeps no execution ledger. It cannot enforce permanent exactly-once delivery, detect a later changed-input reuse of an ID, reconcile unknown outcomes or recover work after a timeout. An `outcome_unknown` response is not failure proof and must not cause a fresh ID retry. No background continuation, polling, callback, queue or status row has been added.
+Use a dedicated stable HMAC-SHA256 identity key and an independent versioned HS256 capability key ring. Canonical base64 secrets are projected via the existing Key Vault path. Synthetic test keys are not production defaults. Verification has a fixed algorithm/issuer/audience and requires signature validity plus canonical equality with frozen job claims. Token-supplied keys, issuers or algorithms never select an alternative authority.
+
+Retain old signing versions through outstanding capability expiry. Do not rotate the identity key in place while tombstones exist; migration/compatibility lookup is a separate task. Disable new starts independently from access for issued callbacks/results. Global disable is an emergency full stop, not a graceful rollout.
+
+Conditional claims use ETags, owner, expiry and generation plus complete WriteId read-back. Result and pending parent notification commit atomically in one entity. An unrelated writer's ETag cannot finish an old claim. Lease expiry never proves an external request was not accepted; Unknown/Held work is not automatically resent after recovery. The first valid result is immutable and duplicates cannot reset the notification outbox.
+
+Input/result JSON is sensitive. Canonical UTF-8, per-property UTF-16 and aggregate limits apply. Unknown/duplicate fields, unsupported schemas and unknown state codes fail closed. Stored content remains untrusted data, not a command to change permissions. Cleanup removes payload properties through replacement only after retention AND capability expiry; unresolved notification or initial-dispatch uncertainty prevents automatic purge. Tombstones preserve deduplication. Retention is not proof of remote cancellation or upstream deletion.
+
+## Telemetry and remaining limits
+
+Application dispatch logs contain only opaque event digest, public alias, outcome, attempt count and duration. Metadata parse warnings contain only the opaque event digest. Maintenance reports aggregate counters. The authentication probe reports check names/booleans and expected commit, not tokens, hosts, session IDs, responses or private exception details. HTTP body/header logging remains disabled for the typed client.
+
+These source controls do not prove Azure host/platform instrumentation is private. Before activation, inspect actual telemetry with synthetic canaries and verify no task/result bodies, bearer tokens, capabilities or private provider content is captured. No live OAuth or agent acceptance result is claimed from disabled deployment health.
+
+There is no model-controlled callback URL, generic agent resume, arbitrary ChatGPT UI-thread injection or additional-reader policy. External exactly-once execution and automatic ambiguous-job resolution are not guaranteed. Keep the upgraded reader/callback binary for version-2 jobs even when optional flags are rolled back. See [job follow-ups](job-follow-ups.md) and [protected acceptance](protected-gateway-acceptance.md).
