@@ -39,9 +39,13 @@ jobs:
         with:
           node-version: '22'
       - name: Restore
-        run: dotnet restore Niobium.AI.Agent.Driver.slnx --nologo
+        run: |
+          dotnet restore Niobium.AI.Agent.Driver.slnx --nologo
+          dotnet restore src/Niobium.AI.Agent.Driver.Deployment.Tests/Niobium.AI.Agent.Driver.Deployment.Tests.csproj --nologo
       - name: Build
-        run: dotnet build Niobium.AI.Agent.Driver.slnx --configuration Release --no-restore --nologo
+        run: |
+          dotnet build Niobium.AI.Agent.Driver.slnx --configuration Release --no-restore --nologo
+          dotnet build src/Niobium.AI.Agent.Driver.Deployment.Tests/Niobium.AI.Agent.Driver.Deployment.Tests.csproj --configuration Release --no-restore --nologo
       - name: Compile Azure infrastructure
         run: az bicep build --file infra/main.bicep --outfile "$RUNNER_TEMP/driver-infra.json"
       - name: Delivery policy tests
@@ -62,7 +66,7 @@ jobs:
           if-no-files-found: error
 
   test:
-    name: Deploy test and run integration
+    name: Deploy test and run candidate integration
     if: github.event_name == 'push'
     needs: verify
     runs-on: ubuntu-latest
@@ -113,11 +117,14 @@ jobs:
           azd deploy --no-prompt
       - name: Resolve deployed test host
         run: python scripts/test-resources.py
-      - name: Run deployed integration tests
+      - name: Verify deployed test commit
         timeout-minutes: 5
         env:
           READONLY_EXPECTED_COMMIT: ${{ github.sha }}
         run: python scripts/read-only-deployment.py --report artifacts/deployed/health.json
+      - name: Run deployed integration tests
+        timeout-minutes: 5
+        run: dotnet test --project src/Niobium.AI.Agent.Driver.Deployment.Tests/Niobium.AI.Agent.Driver.Deployment.Tests.csproj --configuration Release --report-trx --results-directory artifacts/deployed
       - name: Upload deployed test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -132,6 +139,8 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     environment: test
+    outputs:
+      health: ${{ steps.health.outcome }}
     permissions:
       contents: read
       id-token: write
@@ -170,6 +179,7 @@ jobs:
         if: steps.source.outputs.available == 'true'
         run: python scripts/test-resources.py
       - name: Run trusted deployed integration tests at ${{ steps.source.outputs.sha }}
+        id: health
         if: steps.source.outputs.available == 'true'
         timeout-minutes: 5
         env:
@@ -182,6 +192,23 @@ jobs:
           name: trusted-deployed-test-evidence-${{ github.sha }}-${{ steps.source.outputs.sha }}
           path: artifacts/deployed/
           if-no-files-found: error
+
+  test-gate:
+    name: Deploy test and run integration
+    if: always() && github.event_name == 'push'
+    needs: [test, trusted-test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require candidate and trusted deployed tests
+        env:
+          CANDIDATE_RESULT: ${{ needs.test.result }}
+          TRUSTED_RESULT: ${{ needs.trusted-test.result }}
+          TRUSTED_HEALTH: ${{ needs.trusted-test.outputs.health }}
+        run: |
+          if [[ "$CANDIDATE_RESULT" != success || "$TRUSTED_RESULT" != success || "$TRUSTED_HEALTH" != success ]]; then
+            echo 'The candidate deployment and the independent health check from main must both pass.' >&2
+            exit 1
+          fi
 
   prod:
     name: Deploy production and run read-only integration
