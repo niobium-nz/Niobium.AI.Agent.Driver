@@ -16,19 +16,30 @@ The existing coverage thresholds, independent-review gate, test-resource names/r
 
 The authoring container lacks the .NET SDK and could not resolve github.com for cloning. GitHub connector writes and actual GitHub Actions evidence were used instead.
 
-| Candidate / run | Observed result |
+Implementation commit **`7320e082b2d2f1aa5cd48c45c03e49482acbb23f`** passed the complete [Build and local tests job](https://github.com/niobium-nz/Niobium.AI.Agent.Driver/actions/runs/45141602121/job/137580687829) on November 23, 2026:
+
+| Check | Observed result |
 | --- | --- |
-| Initial `6edfc56` / Azure run 45140693659 | Restore succeeded. Build found a missing Core Options reference; corrected in be3c831. |
-| `be3c831` / Azure run 45141138876 | Restore, solution/deployment-test builds, both Bicep compilations, 20 Node policy tests, 16 Python policy tests and all 67 unit tests passed. |
-| Same run, real integration tests | Found two issues: stale Table ETag correctly throws Azure RequestFailedException with status 412 (test expected another type); a second host in the same process bypassed Niobium's static registration guards. This follow-up corrects the expectation and shares one real host per test process. |
-| Current PR head | Must pass its own workflow. See PR #4 for subsequently observed results; previous-head evidence is not certification of this head. |
-| Real ChatGPT OAuth and upstream live acceptance | Not executed; no authorized live credentials/resources used. |
+| Restore and build | Solution and standalone Deployment.Tests project passed. |
+| Infrastructure | Both main.bicep and gateway-auth.bicep compiled. |
+| Delivery policy | 20 Node tests and 16 Python tests passed. |
+| Unit tests | 68 passed, 0 failed, 0 skipped. |
+| Actual-adapter and host integration | 3 passed, 0 failed, 0 skipped. Includes real Azurite persistence, service-side stale ETag 412, current grant permission and actual DI/HTTP handler composition. |
+| Native MCP wire | Passed initialize, tools/list and both disabled-mode tools/call checks against the real local Functions host. Protocol 2025-06-18; structured object and matching text results. |
+| Coverage | 575/615 authored lines, 93.50% combined. Contracts 100%; Core 100%; Server 86.80%. Existing 90% combined / 80% per-module gates passed without authored-file exclusions. |
+| Runtime evidence | .NET SDK 10.0.404; Functions Core Tools 4.17.0; Azurite 3.35.0. Resolved package graph captured in the workflow artifact. |
+| Azure test deployment | Started automatically after the successful verification job. Consult the exact run/PR for its independently observed outcome; it is not implied by local test success. |
+| Real ChatGPT OAuth and upstream live acceptance | Not executed; no authorized live credentials/resources used for agent dispatch. |
 | Production activation, merge, package publication, Stage 2 | Not performed. |
+
+Evidence artifact: `local-test-evidence-7320e082b2d2f1aa5cd48c45c03e49482acbb23f` in run `45141602121`. Later documentation-only changes do not extend this evidence to a new head: that head still requires its own delivery checks.
+
+Earlier CI findings were fixed, not bypassed: add the explicit Core Options dependency, pin the resolved Niobium Table adapter, assert the actual Azure RequestFailedException/412 behavior, and share one real host per integration-test process because Niobium modules have process-wide registration guards. The final passing job still reports upstream obsolete MCP schema overload warnings and the public-cloud issuer Bicep warning; these were not suppressed.
 
 ## Remaining release gates
 
-Before readiness: resolve any exact-head CI failures; pass the existing 90% combined/80% per-module coverage gates, real Azurite and native wire tests, test deployment and independent review. Keep this PR draft while verification is incomplete.
+Before readiness: require the final exact-head workflow, test deployment, trusted-main health verification and independent review. This PR changes delivery files and therefore requires the existing administrative activation procedure in [the approval guide](pr-approval-handoff.md); a green candidate job alone cannot authenticate its own changed workflow. Keep the PR draft while required verification or review is incomplete.
 
 Before activation: validate actual ChatGPT OAuth discovery/client/redirect settings and delegated claims; prove mandatory authentication at every host path; restrict scaffold CORS; adapt health probes for mandatory authentication; verify platform telemetry does not capture bodies or authorization headers; perform only an authorized harmless nonproduction A-to-B trial; record exact commit/runtime and safe evidence. No Anonymous MCP bypass or enablement is included.
 
-Follow [compatibility evidence](compatibility-evidence.md) and [delivery and operations](delivery-and-operations.md). Authored tests do not substitute for observed runtime acceptance.
+Follow [compatibility evidence](compatibility-evidence.md) and [delivery and operations](delivery-and-operations.md). Local disabled-mode tests do not substitute for authenticated live acceptance.
