@@ -78,10 +78,12 @@ git diff 0072ad0 --check
 
 Local TRX and Cobertura results are under `artifacts/unit` and `artifacts/local-integration`. Sanitized loopback transport output is under `artifacts/compatibility/<run-id>/mcp-wire.stdout.log`. Live rollback and platform privacy remain the separate Gate 7 record above.
 
-## Remaining decisions for the owners
+## Owner authorization and remaining setup
 
 1. Provide a scoped route to TEST ingress, approved Entra and ChatGPT access, and the Azure settings, storage and telemetry reader role. Use a restricted sanitized operator export where that can establish read-only settings, including production flags.
-2. Confirm the Entra and workspace owners, actual issuer/resource/client and permitted test principals, the health-verifier identity, and the reviewed workflow transition. Authorize the exact disabled TEST feature deployment window, rollback plan and operator before publishing the branch. That deployment has a zero agent-execution budget.
+2. Confirm the Entra and workspace owners, actual issuer/resource/client and permitted test principals, the health-verifier identity, and the reviewed workflow transition. The disabled TEST source deployment uses a zero agent-execution budget.
 3. Approve the TEST storage and Key Vault staging, workspace publications and connections, scoped grants, retention and exact parent route. Record the sequence, operator, time window, attempt and cost ceilings, permitted retries and stop conditions. Use the approved secret mechanism for acquisition and projection.
 
-**Delivery is BLOCKED pending the TEST deployment authorization.** A feature push starts deployment under the existing pipeline. Run the exact-head test workflow and independent checks, then finish the reviewed PR process. Production activation remains a separate decision after real TEST evidence and live rollback verification.
+The owner approved source delivery after this inspection. It uses the existing TEST workflow, default-off configuration and a zero agent-execution budget. The prior verified disabled TEST build `b27461c32b4f5480ec1dafc7aecb3b1ce5ff1fcd` is the recovery reference. If recovery is needed, coordinate restoration through the approved deployment process and verify exact-commit health and effective flags. Record the exact-head test and independent review on the delivery PR.
+
+Live gates still require actual access, role assignments, scoped configuration and budget inputs. See the [owner configuration guide](live-owner-configuration.md) for the ordered steps and choices. Production activation remains a separate decision.

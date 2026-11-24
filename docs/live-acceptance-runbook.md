@@ -1,6 +1,6 @@
 # Live gateway acceptance runbook
 
-Follow the gates in order on TEST. Record results in [live acceptance evidence](live-acceptance-evidence.md) and use the [activation and rollback procedure](live-activation-and-rollback.md) for setting changes. Coordinate the test deployment window and any existing agent trials before pushing. [PR review and approval](pr-approval-handoff.md)
+Follow the gates in order on TEST. Use the [owner configuration guide](live-owner-configuration.md), record results in [live acceptance evidence](live-acceptance-evidence.md), and use the [activation and rollback procedure](live-activation-and-rollback.md) for setting changes. Coordinate the test deployment window and any existing agent trials before pushing. [PR review and approval](pr-approval-handoff.md)
 
 ## Before a live session
 
