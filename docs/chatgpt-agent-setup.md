@@ -1,6 +1,6 @@
 # ChatGPT agent setup and acceptance
 
-This is an operator runbook, not evidence of a completed live setup. Do not enable the shipped gateway before the compatibility/security gates pass.
+These builder instructions describe Stage 1 dispatch. Use the [live acceptance runbook](live-acceptance-runbook.md) and [tracked-job contract](tracked-jobs.md) for the separately approved A/B result trial and B's completion tool. Confirm the compatibility and security gates before enabling dispatch.
 
 Publish a nonproduction target Workspace Agent B with its API channel enabled. Obtain its Workspace Agent API token through the current supported product flow. Store the token in the approved Key Vault, configure the server-side alias, and provision an initially disabled versioned `AgentRegistration`. Do not use an API Platform key.
 

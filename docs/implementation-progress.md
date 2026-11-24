@@ -4,7 +4,9 @@
 
 Stage 1 PR #5 was merged to `main` as `a2b701b9e98f500092a27ac2ac8acaef2ce4ca44`. Its merge-triggered production deployment and read-only checks passed. No live dispatch activation was implied.
 
-Stage 2 is being delivered in PR #6 on `feature/agent-job-results`. The store-only baseline `d24e8a002b81a8bfca2efdb0a0ef5127c343623a` passed 109 unit tests, 8 local integration tests, 95.17% combined coverage, packaging, exact-commit test deployment and independent health verification in Actions run 45154757229. This historical evidence does not certify later commits.
+Stage 2 PR #6 merged into `main` as `0072ad0631cc58b1c80c90a011a4e5404c1452a0`. The tested feature head `b27461c32b4f5480ec1dafc7aecb3b1ce5ff1fcd` passed the candidate and independent TEST health checks. Production passed its GET-only verification for the merge commit. The [live acceptance evidence record](live-acceptance-evidence.md) tracks current access, effective configuration verification and each live gate. [PR #6](https://github.com/niobium-nz/Niobium.AI.Agent.Driver/pull/6)
+
+The earlier store-only baseline `d24e8a002b81a8bfca2efdb0a0ef5127c343623a` passed 109 unit tests, 8 local integration tests, 95.17% combined coverage, packaging, exact-commit test deployment and independent health verification in Actions run 45154757229. These results apply to that historical commit.
 
 The follow-up commit `93a24949053cd5ec447c20b678bf2dca333a1f46` adds optional provider observation and parent notification. Its build, unit/integration tests and unchanged coverage gate passed in run 45162456012 while the next activation-probe/CORS changes were being prepared. The final PR description records the terminal exact-head results; no local .NET execution in the authoring container is claimed.
 
