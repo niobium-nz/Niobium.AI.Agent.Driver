@@ -60,7 +60,7 @@ public sealed class AuthenticationTests
     }
 
     [TestMethod]
-    [DataRow("audience")] [DataRow("issuer")] [DataRow("expiry")] [DataRow("signature")]
+    [DataRow("audience")] [DataRow("audience-slash")] [DataRow("issuer")] [DataRow("expiry")] [DataRow("signature")]
     public async Task TokenValidationRejectsUntrustedTokens(string mutation)
     {
         using RSA rsa = RSA.Create(2048);
@@ -68,8 +68,14 @@ public sealed class AuthenticationTests
         RsaSecurityKey key = new(rsa) { KeyId = "test-key" };
         RsaSecurityKey otherKey = new(other) { KeyId = "test-key" };
         GatewayAuthenticationOptions settings = Settings();
+        string? audience = mutation switch
+        {
+            "audience" => "wrong-audience",
+            "audience-slash" => settings.Audience + "/",
+            _ => null
+        };
         string token = Token(settings, mutation == "signature" ? otherKey : key,
-            audience: mutation == "audience" ? "wrong-audience" : null,
+            audience: audience,
             issuer: mutation == "issuer" ? "https://untrusted.invalid" : null,
             expired: mutation == "expiry");
         GatewayException error = await Assert.ThrowsExactlyAsync<GatewayException>(() => Adapter(settings, key).GetAsync(Context(token), default));
@@ -77,7 +83,7 @@ public sealed class AuthenticationTests
     }
 
     [TestMethod]
-    [DataRow("tenant")] [DataRow("scope")] [DataRow("client")] [DataRow("subject")]
+    [DataRow("tenant")] [DataRow("scope")] [DataRow("client")] [DataRow("subject")] [DataRow("app-only")]
     public async Task SignedButUnauthorizedClaimsAreDenied(string mutation)
     {
         using RSA rsa = RSA.Create(2048);
@@ -86,7 +92,8 @@ public sealed class AuthenticationTests
         string token = Token(settings, key, tenant: mutation == "tenant" ? Guid.Empty.ToString("D") : null,
             scope: mutation == "scope" ? "Unrelated.Scope" : null,
             client: mutation == "client" ? Guid.Empty.ToString("D") : null,
-            subject: mutation == "subject" ? "not-an-object-id" : null);
+            subject: mutation == "subject" ? "not-an-object-id" : null,
+            appOnly: mutation == "app-only");
         GatewayException error = await Assert.ThrowsExactlyAsync<GatewayException>(() => Adapter(settings, key).GetAsync(Context(token), default));
         Assert.AreEqual(GatewayError.Forbidden, error.Code);
     }
@@ -138,8 +145,9 @@ public sealed class AuthenticationTests
     };
     private static string Token(GatewayAuthenticationOptions settings, SecurityKey key, string? audience = null,
         string? issuer = null, bool expired = false, string? tenant = null, string? scope = null,
-        string? client = null, string? subject = null)
+        string? client = null, string? subject = null, bool appOnly = false)
     {
+        Claim permission = appOnly ? new("roles", "Gateway.Health.Read") : new("scp", scope ?? "AgentGateway.Dispatch");
         SecurityTokenDescriptor descriptor = new()
         {
             Issuer = issuer ?? settings.Issuer, Audience = audience ?? settings.Audience,
@@ -147,7 +155,7 @@ public sealed class AuthenticationTests
             SigningCredentials = new(key, SecurityAlgorithms.RsaSha256),
             Subject = new ClaimsIdentity([
                 new Claim("tid", tenant ?? Tenant), new Claim("oid", subject ?? Subject),
-                new Claim("azp", client ?? Client), new Claim("scp", scope ?? "AgentGateway.Dispatch")])
+                new Claim("azp", client ?? Client), permission])
         };
         return new JwtSecurityTokenHandler().CreateEncodedJwt(descriptor);
     }

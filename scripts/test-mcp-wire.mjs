@@ -36,11 +36,21 @@ const initialized = await rpc('initialize', {
 version = initialized.protocolVersion;
 await rpc('notifications/initialized', {}, true);
 const discovery = await rpc('tools/list', {});
-const expected = ['dispatch_agent', 'get_job_result', 'get_job_status', 'list_agents', 'start_agent_job', 'submit_job_result'];
+const fields = {
+  dispatch_agent: ['conversation_key', 'handoff_id', 'input', 'target_agent'],
+  get_job_result: ['job_id'],
+  get_job_status: ['job_id'],
+  list_agents: [],
+  start_agent_job: ['completion_mode', 'continuation_ref', 'conversation_key', 'handoff_id', 'input', 'result_schema', 'target_agent'],
+  submit_job_result: ['completion_capability', 'job_id', 'outcome', 'result']
+};
+const expected = Object.keys(fields).sort();
 assert.deepEqual(discovery.tools.map(tool => tool.name).sort(), expected);
-const dispatch = discovery.tools.find(tool => tool.name === 'dispatch_agent');
-assert.equal(dispatch.inputSchema.type, 'object');
-assert.deepEqual(Object.keys(dispatch.inputSchema.properties).sort(), ['conversation_key', 'handoff_id', 'input', 'target_agent']);
+assert.equal(discovery.nextCursor ?? null, null);
+for (const { name, inputSchema } of discovery.tools) {
+  assert.equal(inputSchema.type, 'object');
+  assert.deepEqual(Object.keys(inputSchema.properties ?? {}).sort(), fields[name]);
+}
 for (const name of ['dispatch_agent', 'start_agent_job', 'submit_job_result']) {
   assert.notEqual(discovery.tools.find(tool => tool.name === name).annotations?.readOnlyHint, true);
 }

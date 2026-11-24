@@ -10,6 +10,8 @@ The scaffold deployment check is `GET /health`. A ready instance returns HTTP 20
 
 Read [architecture](docs/architecture.md), [configuration](docs/configuration-and-development.md), [security](docs/security.md), [ChatGPT setup](docs/chatgpt-agent-setup.md), [delivery and operations](docs/delivery-and-operations.md), [tracked jobs](docs/tracked-jobs.md), [optional follow-ups](docs/job-follow-ups.md) and [protected gateway acceptance](docs/protected-gateway-acceptance.md). [Compatibility evidence](docs/compatibility-evidence.md) records historical test observations; the PR records final exact-head results. Follow [AGENTS.md](AGENTS.md), use `feature/<description>` branches, and retain the [independent review and approval procedure](docs/pr-approval-handoff.md). Every feature push triggers the trusted test-deployment workflow, including documentation changes.
 
+For controlled TEST validation, use the [live acceptance runbook](docs/live-acceptance-runbook.md), [evidence record](docs/live-acceptance-evidence.md), and [activation and rollback procedure](docs/live-activation-and-rollback.md).
+
 ## Local development
 
 Install a .NET 10 SDK compatible with `global.json`, Node.js 22+, Python 3, Azure CLI/Bicep and PowerShell 7 for the existing delivery tools. The integration suite acquires and owns pinned local Azurite 3.35.0 and Functions Core Tools 4.17.0 processes through npm. Run inside a Git checkout:

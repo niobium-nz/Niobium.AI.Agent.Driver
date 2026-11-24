@@ -53,6 +53,7 @@ public sealed class McpCallerContextAdapter(IOptions<GatewayAuthenticationOption
                 ValidIssuer = options.Issuer,
                 ValidateAudience = true,
                 ValidAudience = options.Audience,
+                IgnoreTrailingSlashWhenValidatingAudience = false,
                 ValidateLifetime = true,
                 RequireExpirationTime = true,
                 RequireSignedTokens = true,

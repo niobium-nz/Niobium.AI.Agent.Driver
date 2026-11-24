@@ -1,8 +1,11 @@
 import io
 import json
 from email.message import Message
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, patch
+from urllib.error import HTTPError
 
 from test_delivery_tools import load
 
@@ -30,6 +33,44 @@ class DeployedHealthTests(unittest.TestCase):
                 self.assertEqual(health.check("https://driver.example.invalid/", expected, 0, opener), success)
                 request = opener.open.call_args.args[0]
                 self.assertEqual((request.get_method(), request.full_url), ("GET", "https://driver.example.invalid/health"))
+                self.assertFalse(request.has_header("Authorization"))
+
+    def test_authenticated_mode_requires_exact_commit_and_denial_of_anonymous_get(self):
+        expected = "a" * 40
+        origin = "https://driver.example.invalid/"
+        for public in (False, True):
+            with self.subTest(public=public):
+                response = io.BytesIO(json.dumps({"status": "ready", "commit": expected}).encode())
+                response.status = 200
+                response.headers = Message()
+                response.headers["Content-Type"] = "application/json"
+                anonymous = io.BytesIO()
+                anonymous.status = 200
+                denial = HTTPError(origin + "health", 401, "Unauthorized", {}, io.BytesIO())
+                opener = Mock()
+                opener.open.side_effect = [response, anonymous if public else denial]
+                self.assertEqual(not public, health.check(origin, expected, 0, opener, access_token="synthetic-health"))
+                authorized, anonymous = [call.args[0] for call in opener.open.call_args_list]
+                self.assertEqual((authorized.full_url, authorized.get_method()), (anonymous.full_url, "GET"))
+                self.assertEqual("GET", anonymous.get_method())
+                self.assertEqual("Bearer synthetic-health", authorized.get_header("Authorization"))
+                self.assertFalse(anonymous.has_header("Authorization"))
+
+    def test_authenticated_cli_fails_closed_when_the_credential_is_missing(self):
+        expected = "a" * 40
+        with TemporaryDirectory() as directory:
+            report = Path(directory) / "health.json"
+            with patch.dict("os.environ", {"READONLY_EXPECTED_COMMIT": expected,
+                                            "READONLY_API_URL": "https://driver.example.invalid"}, clear=True):
+                with patch("sys.argv", ["health", "--report", str(report), "--require-authentication"]):
+                    with patch.object(health, "build_opener") as opener:
+                        with self.assertRaisesRegex(ValueError, "environment-supplied health bearer"):
+                            health.main()
+                        opener.assert_not_called()
+            data = json.loads(report.read_text())
+            self.assertEqual("authenticated", data["mode"])
+            self.assertEqual(expected, data["commit"])
+            self.assertFalse(data["success"])
 
     def test_invalid_deployment_inputs_fail_before_requests_and_redirects_are_disabled(self):
         opener = Mock()

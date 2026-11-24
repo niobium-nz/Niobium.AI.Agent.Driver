@@ -6,9 +6,9 @@ Contracts and Core use project references and `IsPackable=false`. The pre-existi
 
 ## Activation and rollback
 
-Ordinary IaC deployments deliberately restore `AgentGatewayOptions__Enabled=false`. Activation requires a reviewed change after the OAuth/client, upstream and telemetry acceptance evidence is recorded. Do not patch enabled=true by hand and assume it survives a later deployment. `gateway-auth.bicep` protects all paths; update the existing health harness to carry appropriate authentication when adopting it. The scaffold CORS policy and OAuth discovery/registration must be reviewed against the actual connected client before activation.
+Ordinary IaC deployments restore execution flags to their disabled states. Make any approved TEST enablement durable through reviewed environment configuration. `gateway-auth.bicep` protects all paths. Coordinate the authenticated health workflow and actual OAuth enrollment before applying it. [Live acceptance runbook](live-acceptance-runbook.md)
 
-To stop new dispatches, disable the gateway, disable a registration or revoke the principal grant through the conditional operator command. In-flight requests may already have been accepted; disabling cannot undo them. Keep old aliases and credential bindings stable during an uncertain retry window. A new channel/account binding gets a new alias and explicit cutover, not an in-place edit.
+Use the [graceful rollback procedure](live-activation-and-rollback.md#graceful-rollback) to pause tracked starts and optional follow-ups while retaining authorized access for issued work. Quiesce Stage 1 dispatch separately through a scoped conditional grant or registration update. An in-flight request may already be accepted. Preserve existing aliases and credential bindings through reconciliation. A channel or account change requires a new alias and an approved cutover.
 
 Rotate a token only within the same approved account/channel scope and trusted credential alias. Review Key Vault reference resolution without printing the value. Unknown or unresolved aliases fail closed. Do not delete registry rows as a substitute for investigated rollback.
 

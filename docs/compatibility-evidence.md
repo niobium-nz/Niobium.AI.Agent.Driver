@@ -31,6 +31,6 @@ Initial commit c4231c2 passed build and its then-present tests but missed the un
 | Upstream | Authorized harmless nonproduction handoff and independent target receipt; preserve identical key/body semantics during any controlled retry. |
 | Completion | A separate approved B connection receives the capability and submits a bounded result; unauthorized principals and wrong-job capabilities are rejected on the real host. |
 | Operations/privacy | Restrictive CORS, authenticated health probes, platform telemetry redaction, approved Table/RBAC/Key Vault setup and tested rollback preserving issued callbacks. |
-| Optional continuation/polling | Separate implementation, credentials/capability evidence and reviewed rollout; both remain absent. |
+| Optional continuation/polling | Source was merged in PR #6. Live provider status and exact parent API-conversation delivery require separate approved trials. |
 
-The authoring container lacks the .NET SDK and cannot clone GitHub over its network. Connected GitHub source writes and actual Actions evidence are used. No local .NET pass, live token use, production activation or real agent execution should be inferred from authored source or disabled local probes.
+The Stage 1 and Stage 2 authoring sessions reported their .NET evidence from GitHub Actions. See [live acceptance evidence](live-acceptance-evidence.md) for subsequent local source checks, the deployed-health baseline and the status of each real-environment trial.
